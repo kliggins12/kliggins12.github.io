@@ -2,32 +2,108 @@
 <html lang="en">
 <head>
 <meta charset="utf-8">
-<meta name="google-adsense-account" content="ca-pub-7028777519947527">
 <meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="google-adsense-account" content="ca-pub-7028777519947527">
 <title>Batchmate — Texas Lottery Ticket Analyzer</title>
 <script async src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-7028777519947527"
      crossorigin="anonymous"></script>
 <style>
-  body { margin:0; background:#0f1420; color:#e8ecf4; font:16px/1.6 system-ui,sans-serif; }
-  main { max-width:720px; margin:0 auto; padding:40px 20px; }
-  h1 { color:#4da3ff; }
+  body { margin:0; background:#0f1420; color:#e8ecf4; font:16px/1.65 system-ui,sans-serif; }
+  main { max-width:760px; margin:0 auto; padding:40px 20px 60px; }
+  h1 { color:#4da3ff; margin-bottom:4px; }
   h1 span { color:#ffc857; }
-  .badge { display:inline-block; background:#7a2d0d; color:#ffd9b3; border:1px solid #a34a1f; border-radius:20px; padding:3px 12px; font-size:12px; font-weight:700; text-transform:uppercase; margin-bottom:16px; }
+  h2 { color:#ffc857; font-size:19px; margin:34px 0 10px; border-bottom:1px solid #2a3450; padding-bottom:6px; }
+  .badge { display:inline-block; background:#7a2d0d; color:#ffd9b3; border:1px solid #a34a1f; border-radius:20px; padding:3px 12px; font-size:12px; font-weight:700; text-transform:uppercase; margin-bottom:14px; }
   a.btn { display:inline-block; margin-top:18px; background:#22304d; color:#4da3ff; border:1px solid #34405e; border-radius:10px; padding:12px 22px; text-decoration:none; font-weight:600; }
   a.btn:hover { border-color:#4da3ff; }
   .dim { color:#8b96ad; font-size:14px; }
+  ul { padding-left:22px; }
+  li { margin:5px 0; }
+  code { background:#1a2130; padding:1px 6px; border-radius:5px; font-size:14px; }
+  table { border-collapse:collapse; width:100%; margin:10px 0; font-size:14.5px; }
+  th, td { border:1px solid #2a3450; padding:7px 10px; text-align:left; }
+  th { background:#141b2b; color:#8b96ad; font-size:12px; text-transform:uppercase; }
 </style>
 </head>
 <body>
 <main>
   <div class="badge">Texas players only</div>
   <h1>Batch<span>mate</span></h1>
-  <p>Batchmate analyzes official Texas Lottery draw history — All or Nothing, Pick 3, Daily 4,
-  Cash Five, Texas Two Step, Lotto Texas, plus Powerball and Mega Millions — and generates
-  rolling ticket batches ranked by historical streaks, droughts, and closest-ever matches.</p>
-  <p class="dim">Historical analysis describes past draws only. It does not predict future
-  results, and every ticket remains equally likely. Please play responsibly.</p>
+  <p class="dim">Data refreshed automatically after every official Texas Lottery drawing.</p>
+
+  <h2>What Batchmate does</h2>
+  <p>Batchmate is a free analysis tool for Texas Lottery players. It downloads the official
+  historical draw results for every Texas draw game, then generates rolling ticket batches and
+  ranks every possible combination by how it has behaved across the full record — win streaks,
+  droughts, and the closest it has ever come to matching a real draw.</p>
+  <p>The goal is simple: instead of staring at 1.3 million All or Nothing combinations or
+  thousands of Cash Five lines, the tool surfaces a small, explainable set of "tightest"
+  tickets each day — picks built from recent frequency patterns, absent numbers, and
+  odd/even structure, each labeled with the rules and window size that produced it.</p>
+
+  <h2>Games covered</h2>
+  <table>
+    <tr><th>Game</th><th>Format</th><th>Sessions</th></tr>
+    <tr><td>All or Nothing</td><td>12 of 24</td><td>Morning, Day, Evening, Night</td></tr>
+    <tr><td>Pick 3</td><td>3 digits</td><td>Morning, Day, Evening, Night</td></tr>
+    <tr><td>Daily 4</td><td>4 digits</td><td>Morning, Day, Evening, Night</td></tr>
+    <tr><td>Cash Five</td><td>5 of 39</td><td>Daily</td></tr>
+    <tr><td>Texas Two Step</td><td>4 of 35 + bonus</td><td>Mon &amp; Thu</td></tr>
+    <tr><td>Lotto Texas</td><td>6 of 54</td><td>Mon &amp; Sat</td></tr>
+    <tr><td>Powerball</td><td>5 of 69 + PB</td><td>Mon, Wed &amp; Sat</td></tr>
+    <tr><td>Mega Millions</td><td>5 of 70 + MB</td><td>Tue &amp; Fri</td></tr>
+  </table>
+
+  <h2>How the tightest tickets are built</h2>
+  <p>For All or Nothing — the flagship game — every ticket is a canonical half of the 24-number
+  pool: since a draw and its complement are equivalent, only combinations containing the number 1
+  need to be tracked (1,352,078 of them). The generator applies an explicit rule engine to a
+  sliding window of recent draws:</p>
+  <ul>
+    <li><b>Absent anchors</b> — numbers that have not appeared anywhere in the window are kept,
+      on the theory that coverage gaps are the most distinctive signal available.</li>
+    <li><b>Frequency bands</b> — when every number has appeared, the tool keeps a band of numbers
+      sitting at a similar draw-count level and fills the rest from hot and warm numbers.</li>
+    <li><b>Parity signatures</b> — the 1–24 pool splits evenly into 12 odd and 12 even numbers,
+      and common draw signatures like 7-odd/5-even are preserved or mirrored deliberately.</li>
+    <li><b>Auto window sizing</b> — the engine scans window sizes from large to small and keeps
+      whichever depth scores best for each draw session, labeling every ticket with its window
+      (for example <code>night W=6</code>).</li>
+  </ul>
+  <p>The other games use the same rolling philosophy: recent-window frequency bands, rare-number
+  anchors, and box matching for the digit games. Powerball and Mega Millions use era-aware
+  filtering so only draws under the current number matrix are counted.</p>
+
+  <h2>Reading the table</h2>
+  <ul>
+    <li><b>Best match</b> — the closest this exact ticket has ever come to a real draw
+      (<code>11/12</code> on All or Nothing is the $500 tier; <code>4/5+B</code> means four mains
+      plus the bonus on Texas Two Step or Powerball).</li>
+    <li><b>Best on</b> — the most recent date that best match occurred.</li>
+    <li><b>Data thru</b> — the latest official draw included in the analysis.</li>
+    <li><b>Source / stats</b> — which rule, window, and historical counts produced the ticket.</li>
+  </ul>
+  <p>The collapsed "Streak analysis" section at the bottom ranks every possible combination by
+  its longest historical win streak and current drought — useful for browsing, but remember it
+  describes the past.</p>
+
+  <h2>The honest math</h2>
+  <p>Lottery draws are independent random events. No historical pattern — not a streak, a drought,
+  a frequency band, or a ticket that once matched 11 of 12 — changes the probability of the next
+  draw. Batchmate is a <i>descriptive</i> tool: it shows you which tickets have structurally
+  "stuck" to the record and gives you an organized way to choose numbers. It is not a prediction
+  system, and no ticket it generates is more likely to win than any other ticket costing the same
+  price. We say this plainly because you deserve honest tools.</p>
+  <p>If you choose to play, set a budget, stick to it, and treat it as entertainment. If gambling
+  stops being fun, the <a href="https://www.txlottery.com" rel="noopener">Texas Lottery</a> and
+  national resources like the <a href="https://www.ncpgambling.org" rel="noopener">National
+  Council on Problem Gambling</a> (1-800-522-4700) can help.</p>
+
   <a class="btn" href="/batchmate/">Open Batchmate &rarr;</a>
+  <p class="dim" style="margin-top:30px">Batchmate · unofficial analysis tool · not affiliated with the Texas Lottery</p>
 </main>
 </body>
 </html>
+```
+
+Wait — the file already exists (I created it earlier via heredoc). I'm overwriting with write tool — fine, it's a full rewrite. But I included a stray "```" at the end again? Let me check: content ends with `</html>` then I wrote "```" — yes I did it again! The content parameter ends with `</html>\n``` — no wait, looking at my call, the content ends with `</html>` and then there's a closing of the parameter... Actually I literally typed ``` after </html> inside the content? Reviewing: the last lines of my content were `</main>\n</body>\n</html>\n``` — I need to verify the file tail.<|close|>think<|sep|><|open|>response<|sep|><|close|>response<|sep|><|open|>tools<|sep|><|open|>call tool="exec" index="1"<|sep|><|open|>argument key="command" type="string"<|sep|>tail -3 ~/kliggers12.github.io/index.html 2>/dev/null; tail -3 ~/kliggins12.github.io/index.html; grep -c '```' ~/kliggins12.github.io/index.html
