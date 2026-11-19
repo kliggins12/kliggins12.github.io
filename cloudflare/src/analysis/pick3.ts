@@ -93,6 +93,25 @@ export type AssumptionEvaluation = {
   }>;
 };
 
+export function validatePick3Markings(markings: Marking[]): void {
+  const ids = new Set<string>();
+  const occupied = new Set<string>();
+  for (const marking of markings) {
+    if (!marking.id || ids.has(marking.id)) {
+      throw new Error("Every board marking must have a unique, non-empty ID.");
+    }
+    ids.add(marking.id);
+    const { row, column } = marking.position;
+    if (!Number.isInteger(row) || row < 0 || row >= PICK3_ROWS ||
+        !Number.isInteger(column) || column < 0 || column >= PICK3_COLUMNS) {
+      throw new Error(`Marking ${marking.id} is outside the 10×3 Pick 3 board.`);
+    }
+    const slot = `${row}:${column}`;
+    if (occupied.has(slot)) throw new Error(`Multiple markings occupy board slot ${slot}.`);
+    occupied.add(slot);
+  }
+}
+
 export function createInitialPick3Board(session: Pick3Session): Pick3BoardState {
   return {
     game: "Pick 3",
@@ -184,13 +203,7 @@ export function commitPick3BoardAfterDraw(args: {
   if (args.previous.asOfDate && args.draw.date <= args.previous.asOfDate) {
     throw new Error("Pick 3 board draws must be applied in strictly chronological order.");
   }
-  for (const marking of args.resultingMarkings) {
-    const { row, column } = marking.position;
-    if (!Number.isInteger(row) || row < 0 || row >= PICK3_ROWS ||
-        !Number.isInteger(column) || column < 0 || column >= PICK3_COLUMNS) {
-      throw new Error(`Marking ${marking.id} is outside the 10×3 Pick 3 board.`);
-    }
-  }
+  validatePick3Markings(args.resultingMarkings);
   return {
     ...args.previous,
     markings: cloneMarkings(args.resultingMarkings),
