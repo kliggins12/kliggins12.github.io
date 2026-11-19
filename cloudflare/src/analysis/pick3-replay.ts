@@ -96,7 +96,7 @@ export function replayPick3Session(args: {
     const assumptionId = `pick3:${args.session}:${draw.date}`;
     const createdAt = args.createdAt?.(target);
 
-    const assumption = previousAssumption
+    const assumption: FrozenAssumption = previousAssumption
       ? rollPick3Assumption({
           id: assumptionId,
           nextBoard: board,
