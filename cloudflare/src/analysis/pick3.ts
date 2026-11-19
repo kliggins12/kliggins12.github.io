@@ -61,8 +61,10 @@ export type FrozenAssumption = {
   sourceCutoffDate: string | null;
   predecessorAssumptionId: string | null;
   boardRevision: number;
-  /** Immutable copy of the board markings at assumption time. */
-  boardMarkings: Marking[];
+  /** Immutable source-board markings available before the target draw. */
+  sourceBoardMarkings: Marking[];
+  /** Projected board markings for the target draw, produced without its result. */
+  projectedMarkings: Marking[];
   /** Human/machine-readable proposed marking changes, not guessed draw digits. */
   proposedChanges: BoardChange[];
 };
@@ -125,6 +127,7 @@ export function freezePick3Assumption(args: {
   board: Pick3BoardState;
   target: Pick3Draw;
   predecessorAssumptionId?: string | null;
+  projectedMarkings: Marking[];
   proposedChanges?: BoardChange[];
   createdAt?: string;
 }): FrozenAssumption {
@@ -145,7 +148,8 @@ export function freezePick3Assumption(args: {
     sourceCutoffDate: args.board.asOfDate,
     predecessorAssumptionId: args.predecessorAssumptionId ?? null,
     boardRevision: args.board.revision,
-    boardMarkings: cloneMarkings(args.board.markings),
+    sourceBoardMarkings: cloneMarkings(args.board.markings),
+    projectedMarkings: cloneMarkings(args.projectedMarkings),
     proposedChanges: (args.proposedChanges ?? []).map((change) => ({
       ...change,
       from: change.from ? { ...change.from } : undefined,
@@ -199,7 +203,7 @@ export function evaluatePick3Assumption(
     throw new Error("Actual board does not belong to the assumption's target draw.");
   }
 
-  const assumed = new Map(assumption.boardMarkings.map((m) => [m.id, m]));
+  const assumed = new Map(assumption.projectedMarkings.map((m) => [m.id, m]));
   const actual = new Map(actualBoard.markings.map((m) => [m.id, m]));
   const matchedMarkingIds: string[] = [];
   const missingMarkingIds: string[] = [];
@@ -249,6 +253,7 @@ export function rollPick3Assumption(args: {
   nextBoard: Pick3BoardState;
   nextTarget: Pick3Draw;
   previousAssumption: FrozenAssumption;
+  projectedMarkings: Marking[];
   proposedChanges?: BoardChange[];
   createdAt?: string;
 }): FrozenAssumption {
@@ -260,6 +265,7 @@ export function rollPick3Assumption(args: {
     board: args.nextBoard,
     target: args.nextTarget,
     predecessorAssumptionId: args.previousAssumption.id,
+    projectedMarkings: args.projectedMarkings,
     proposedChanges: args.proposedChanges,
     createdAt: args.createdAt
   });
