@@ -88,8 +88,8 @@ function expectedNumbers(source: Source): number {
   if (source.game === "All or Nothing") return 12;
   if (source.game === "Pick 3") return 3;
   if (source.game === "Daily 4") return 4;
-  if (source.game === "Cash Five") return 5;
-  return 6; // Texas Two Step, Lotto Texas, Powerball, Mega Millions
+  if (source.game === "Cash Five" || source.game === "Texas Two Step") return 5;
+  return 6; // Lotto Texas, Powerball, Mega Millions
 }
 
 function parseSourceDraws(csv: string, source: Source): ParsedDraw[] {
