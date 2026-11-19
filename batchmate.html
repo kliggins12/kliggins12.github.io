@@ -367,10 +367,49 @@ document.querySelectorAll('th[data-tk]').forEach(th=>{
 });
 document.getElementById('gameSel').onchange = render;
 document.getElementById('topN').onchange = render;
-// auto-refresh: reload when tab becomes visible again, and every 30 seconds
-setInterval(()=>{ if(!document.hidden) location.reload(); }, 30*1000);
-document.addEventListener('visibilitychange', ()=>{ if(!document.hidden) location.reload(); });
-load().catch(e=>{document.getElementById('status').textContent='failed to load batchmate_data.json — run batchmate_build.py first';console.error(e)});
+// Check for a newly published data build every 30 seconds.
+// Reload once when the build timestamp changes, then stop polling for this visit.
+let refreshTimer = null;
+let refreshCheckInFlight = false;
+const refreshedBuild = sessionStorage.getItem('batchmate-refreshed-build');
+async function checkForNewData() {
+  if (document.hidden || refreshCheckInFlight || refreshedBuild === (DATA && DATA.generated)) return;
+  refreshCheckInFlight = true;
+  try {
+    const response = await fetch('batchmate_data.json?check=' + Date.now(), {cache:'no-store'});
+    if (!response.ok) throw new Error('HTTP ' + response.status);
+    const latest = await response.json();
+    if (latest.generated && DATA && latest.generated !== DATA.generated) {
+      clearInterval(refreshTimer);
+      sessionStorage.setItem('batchmate-refreshed-build', latest.generated);
+      location.reload();
+      return;
+    }
+    const notice = document.getElementById('refreshNotice');
+    if (notice) notice.textContent = 'Waiting for new published data · current build ' + (DATA && DATA.generated || 'unknown');
+  } catch (error) {
+    const notice = document.getElementById('refreshNotice');
+    if (notice) notice.textContent = 'Waiting for published data · last check failed';
+    console.warn('Batchmate update check failed:', error);
+  } finally {
+    refreshCheckInFlight = false;
+  }
+}
+function startDataPolling() {
+  // The one-time reload has completed; clear the marker and do not restart polling
+  // until the user opens a fresh page visit.
+  if (refreshedBuild && DATA && refreshedBuild === DATA.generated) {
+    sessionStorage.removeItem('batchmate-refreshed-build');
+    const notice = document.getElementById('refreshNotice');
+    if (notice) notice.textContent = 'New data loaded · automatic refresh stopped';
+    return;
+  }
+  refreshTimer = setInterval(checkForNewData, 30*1000);
+  document.addEventListener('visibilitychange', () => {
+    if (!document.hidden) checkForNewData();
+  });
+}
+load().then(startDataPolling).catch(e=>{document.getElementById('status').textContent='failed to load batchmate_data.json — published data is not available yet';const notice=document.getElementById('refreshNotice');if(notice)notice.textContent='Waiting for first successful data publish';console.error(e)});
 </script>
 </body>
 </html>
