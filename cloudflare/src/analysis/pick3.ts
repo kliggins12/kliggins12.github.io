@@ -35,6 +35,12 @@ export type Pick3BoardState = {
   revision: number;
 };
 
+export type Pick3DrawTarget = {
+  id: string;
+  session: Pick3Session;
+  date: string;
+};
+
 export type Pick3Draw = {
   id: string;
   session: Pick3Session;
@@ -125,7 +131,7 @@ function cloneMarkings(markings: Marking[]): Marking[] {
 export function freezePick3Assumption(args: {
   id: string;
   board: Pick3BoardState;
-  target: Pick3Draw;
+  target: Pick3DrawTarget;
   predecessorAssumptionId?: string | null;
   projectedMarkings: Marking[];
   proposedChanges?: BoardChange[];
@@ -251,7 +257,7 @@ export function evaluatePick3Assumption(
 export function rollPick3Assumption(args: {
   id: string;
   nextBoard: Pick3BoardState;
-  nextTarget: Pick3Draw;
+  nextTarget: Pick3DrawTarget;
   previousAssumption: FrozenAssumption;
   projectedMarkings: Marking[];
   proposedChanges?: BoardChange[];
