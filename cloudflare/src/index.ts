@@ -244,7 +244,26 @@ export default {
         INNER JOIN (
           SELECT source_filename,MAX(draw_date) AS max_date FROM draws GROUP BY source_filename
         ) latest ON latest.source_filename=d.source_filename AND latest.max_date=d.draw_date
-        ORDER BY d.game,d.session
+        ORDER BY
+          CASE d.game
+            WHEN 'All or Nothing' THEN 1
+            WHEN 'Pick 3' THEN 2
+            WHEN 'Daily 4' THEN 3
+            WHEN 'Cash Five' THEN 4
+            WHEN 'Texas Two Step' THEN 5
+            WHEN 'Lotto Texas' THEN 6
+            WHEN 'Powerball' THEN 7
+            WHEN 'Mega Millions' THEN 8
+            ELSE 99
+          END,
+          CASE d.session
+            WHEN 'morning' THEN 1
+            WHEN 'day' THEN 2
+            WHEN 'evening' THEN 3
+            WHEN 'night' THEN 4
+            ELSE 5
+          END,
+          d.draw_date DESC
       `).all();
       return json({ count: result.results.length, draws: result.results });
     }
