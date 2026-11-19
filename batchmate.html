@@ -409,7 +409,7 @@ function startDataPolling() {
     if (!document.hidden) checkForNewData();
   });
 }
-load().then(startDataPolling).catch(e=>{document.getElementById('status').textContent='failed to load batchmate_data.json — published data is not available yet';const notice=document.getElementById('refreshNotice');if(notice)notice.textContent='Waiting for first successful data publish';console.error(e)});
+load().then(startDataPolling).catch(e=>{document.getElementById('status').textContent='Drawing history is temporarily unavailable. Please try again shortly.';const notice=document.getElementById('refreshNotice');if(notice)notice.textContent='Waiting for first successful data publish';console.error(e)});
 </script>
 </body>
 </html>
