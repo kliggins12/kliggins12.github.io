@@ -43,9 +43,9 @@ footer{border-top:1px solid var(--line);padding:20px clamp(18px,4vw,48px);color:
  <div class="notice">Review past drawings and compare number results over time.</div>
  <div class="grid section">
   <article class="card"><h3>Past drawings</h3><div class="metric" id="recordCount">0</div><div class="muted">Draws available</div></article>
-  <article class="card"><h3>Drawings Reviewed</h3><div class="metric" id="journalCount">0</div><div class="muted">Chronological observations</div></article>
-  <article class="card"><h3>Changes Over Time</h3><div class="metric" id="transitionCount">0</div><div class="muted">Past drawing comparisons</div></article>
-  <article class="card"><h3>Number Ideas</h3><div class="metric" id="assumptionCount">0</div><div class="muted">Ideas kept separate from actual results</div></article>
+  <article class="card"><h3>Drawings Reviewed</h3><div class="metric" id="journalCount">0</div><div class="muted">Drawings listed by date</div></article>
+  <article class="card"><h3>Changes Over Time</h3><div class="metric" id="transitionCount">0</div><div class="muted">Compare earlier and recent results</div></article>
+  <article class="card"><h3>Number Ideas</h3><div class="metric" id="assumptionCount">0</div><div class="muted">Separate from past results</div></article>
  </div>
  <div class="grid section">
   <article class="card"><h2>Drawing Journal</h2><p class="muted">Browse past drawings by date, game, and drawing time.</p><button class="subtle" data-go="journal">View journal</button></article>
@@ -70,16 +70,16 @@ footer{border-top:1px solid var(--line);padding:20px clamp(18px,4vw,48px);color:
  <div class="card"><h2>Drawing Journal</h2><p class="muted">Browse drawings in date order by game and drawing time.</p><div class="notice">Drawing details will appear here when available.</div></div>
 </section>
 <section id="shapes" class="panelview">
- <div class="card"><h2>Number Review</h2><p class="muted">Review the numbers from one drawing alongside the next drawing for the same game and time.</p><div class="notice">Number comparisons will appear here when available.</div></div>
+ <div class="card"><h2>Number Review</h2><p class="muted">Review the numbers from one drawing alongside the next drawing for the same game and time.</p><div class="notice">Number comparisons will appear here.</div></div>
 </section>
 <section id="transitions" class="panelview">
- <div class="card"><h2>Changes Over Time</h2><p class="muted">Review differences between past drawings in date order.</p><div class="notice">Drawing comparisons will appear here when available.</div></div>
+ <div class="card"><h2>Changes Over Time</h2><p class="muted">Review differences between past drawings in date order.</p><div class="notice">Past drawing comparisons will appear here.</div></div>
 </section>
 <section id="assumptions" class="panelview">
- <div class="card"><h2>Ideas for the Next Drawing</h2><p class="muted">Possible number combinations will follow each game's number rules. These are working ideas only, kept separate from actual results; they are not predictions and do not improve the odds.</p><div class="notice">Next-draw ideas are not available yet while the game rules and checks are being completed.</div></div>
+ <div class="card"><h2>Ideas for the Next Drawing</h2><p class="muted">Review number combinations for upcoming drawings. These are ideas to consider, not predictions or a guarantee of results.</p><div class="notice">Number ideas will appear here when available.</div></div>
 </section>
 <section id="imports" class="panelview">
- <div class="card"><h2>Past Drawings</h2><p class="muted">Review past drawings by game and drawing time. New history is checked for the correct date and number format before it is added, helping keep the record accurate and consistent.</p>
+ <div class="card"><h2>Past Drawings</h2><p class="muted">Choose a game and drawing time to browse its past results.</p>
  <p><button class="action" id="loadCsvBtn" type="button">View Drawing History</button> <span class="muted" id="csvStatus" role="status">History not loaded</span></p>
  <div id="csvResults" class="tablewrap muted">Choose a game and drawing time to browse its history in date order.</div>
  <div class="section" style="display:flex;gap:10px;flex-wrap:wrap;align-items:center">
@@ -122,11 +122,11 @@ async function loadStreamPage(reset){
 async function loadBatchmateCsvs(){
  const btn=document.getElementById('loadCsvBtn'),status=document.getElementById('csvStatus'),out=document.getElementById('csvResults');btn.disabled=true;status.textContent='Connecting to drawing history…';
  try{const response=await fetch(DATA_API+'/api/session-draws/summary',{cache:'no-store'});const payload=await response.json();if(!response.ok||!payload.ok)throw new Error(payload.error||'Drawing history is temporarily unavailable');
-  streamSummary=payload.streams||[];status.textContent='Connected · '+Number(payload.drawCount).toLocaleString()+' historical records';document.getElementById('recordCount').textContent=Number(payload.drawCount).toLocaleString();
+  streamSummary=payload.streams||[];status.textContent='Ready · '+Number(payload.drawCount).toLocaleString()+' past drawings';document.getElementById('recordCount').textContent=Number(payload.drawCount).toLocaleString();
   document.getElementById('journalCount').textContent='0';document.getElementById('transitionCount').textContent='0';document.getElementById('assumptionCount').textContent='0';
   const select=document.getElementById('streamSelect');select.innerHTML=streamSummary.map(s=>'<option value="'+s.game+'|'+s.session+'">'+s.game+' · '+s.session+' ('+Number(s.draw_count).toLocaleString()+')</option>').join('');
   document.getElementById('loadHistoryBtn').disabled=streamSummary.length===0;
-  out.innerHTML='<table><thead><tr><th>Game</th><th>Session</th><th>Number of drawings</th><th>First date</th><th>Latest date</th></tr></thead><tbody>'+streamSummary.map(s=>'<tr><td>'+s.game+'</td><td>'+s.session+'</td><td>'+Number(s.draw_count).toLocaleString()+'</td><td>'+s.first_draw_date+'</td><td>'+s.last_draw_date+'</td></tr>').join('')+'</tbody></table>';if(streamSummary.length)await loadStreamPage(true);
+  out.innerHTML='<table><thead><tr><th>Game</th><th>Session</th><th>Drawings</th><th>First date</th><th>Latest date</th></tr></thead><tbody>'+streamSummary.map(s=>'<tr><td>'+s.game+'</td><td>'+s.session+'</td><td>'+Number(s.draw_count).toLocaleString()+'</td><td>'+s.first_draw_date+'</td><td>'+s.last_draw_date+'</td></tr>').join('')+'</tbody></table>';if(streamSummary.length)await loadStreamPage(true);
  }catch(e){status.textContent='History unavailable';out.textContent=e.message;console.error('Drawing history connection failed:',e)}finally{btn.disabled=false}
 }
 document.getElementById('loadCsvBtn').addEventListener('click',loadBatchmateCsvs);
