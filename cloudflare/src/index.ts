@@ -1,5 +1,9 @@
+import { checkTurso } from "./turso";
+
 interface Env {
   DB: D1Database;
+  TURSO_DATABASE_URL?: string;
+  TURSO_AUTH_TOKEN?: string;
   ARCHIVE: R2Bucket;
   API_TOKEN?: string;
 }
@@ -216,6 +220,20 @@ export default {
     const url = new URL(request.url);
     if (request.method === "OPTIONS") return new Response(null, { status: 204, headers: CORS_HEADERS });
     if (url.pathname === "/health") return json({ ok: true, service: "batchmate-data", time: new Date().toISOString() });
+
+    if (url.pathname === "/api/turso/health") {
+      try {
+        await checkTurso(env);
+        return json({ ok: true, database: "turso", connected: true });
+      } catch (error) {
+        return json({
+          ok: false,
+          database: "turso",
+          connected: false,
+          error: error instanceof Error ? error.message : "Connection failed"
+        }, 503);
+      }
+    }
 
     if (url.pathname === "/api/status") {
       const [run, files] = await Promise.all([
