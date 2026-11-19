@@ -72,14 +72,8 @@
   </table>
   </div>
   <p class="meta" style="margin:0 0 14px;font-size:14px;line-height:1.5">
-    <b style="color:var(--gold)">Batchmate</b> compares number combinations with past drawing results
-    across official Texas Lottery draw data. <b>Closest matches</b> shows the strongest matches
-    matches on the latest draw; <b>Ticket lists</b> below show the latest
-    generated batches — number combinations built from recent drawing patterns, and
-    Powerball/Mega Millions numbers — for Texas players only.
-    Past results do not change the odds of future random draws; every ticket remains equally likely.
-    This is a descriptive analysis tool, not a prediction system. Please play responsibly.
-  </p>
+    <b style="color:var(--gold)">Batchmate</b> makes it easier to review number combinations and compare them with past drawings. Results are updated as new drawings become available. Past results are for reference only and do not change the odds of future drawings.
+   </p>
   <div class="adslot" id="ad-top"><ins class="adsbygoogle"
      style="display:block"
      data-ad-format="autorelaxed"
@@ -110,51 +104,23 @@
      (adsbygoogle = window.adsbygoogle || []).push({});
 </script></div>
   <details style="margin-top:20px">
-    <summary style="cursor:pointer;color:var(--gold);font-size:15px;font-weight:600">How Batchmate works (click to learn more)</summary>
+    <summary style="cursor:pointer;color:var(--gold);font-size:15px;font-weight:600">About these results (click to learn more)</summary>
     <div class="meta" style="margin-top:10px;line-height:1.6;font-size:13.5px">
-      <p><b>What this is:</b> Batchmate downloads official Texas Lottery draw results for every
-      draw game and generates rolling ticket batches. The "Tightest tickets" table shows the
-      latest picks; "Best match" is the closest that exact ticket has ever come to a real draw
-      (e.g. <code>11/12</code> on All or Nothing is the $500 tier), "Best on" is the most recent
-      date that match occurred, and "Data thru" is the latest draw analyzed.</p>
-      <p><b>How tickets are built:</b> every game uses a sliding window of the most recent draws
-      (the <code>W=</code> label, usually 4–10). Numbers or digits that appeared rarely in that
-      window become the "rare pieces" tickets are built from, then every candidate is scored
-      against the full draw history on wins and drought length.</p>
-      <ul>
-        <li><b>All or Nothing</b> adds an explicit rule engine on top — absent-number anchors
-        when coverage gaps exist, frequency bands when they don't, odd/even signature matching,
-        and automatic window sizing per draw session (morning/day/evening/night each get their
-        own <code>W=</code>). Because a draw and its 12-number complement are equivalent, only
-        the 1,352,078 combinations containing the number 1 are tracked.</li>
-        <li><b>Pick 3 &amp; Daily 4</b> bucket digits 0–9 by frequency across the window, build
-        candidate digit multisets from the rarest digits, and score them by box-match wins
-        (any digit order counts) and drought across each session's full history.</li>
-        <li><b>Cash Five, Texas Two Step &amp; Lotto Texas</b> pick core numbers seen ≤2 times in
-        the window plus high-frequency fillers, generate the combinations, and score on their
-        real prize tiers (e.g. Lotto Texas match ≥4 on the post-2006 6/54 matrix).</li>
-        <li><b>Powerball &amp; Mega Millions</b> use the same rare-piece rolling over the current
-        number-matrix era only (PB 5/69 + bonus 1–26 since 2015; MM 5/70 since 2020), scored on
-        jackpot and lower-tier hits.</li>
-      </ul>
-      <p><b>The honest math:</b> Lottery draws are independent random events. Historical streaks,
-      droughts, and frequency patterns describe the past — they do not change the probability of
-      the next draw, and every ticket remains equally likely. Batchmate is a descriptive
-      analysis tool for organizing number choices, not a prediction system. Please play
-      responsibly.</p>
-    </div>
-  </details>
+       <p>These lists compare number combinations with official past drawings. You can review recent matches, earlier results, and how often combinations have matched before.</p>
+       <p>Past results do not predict future drawings. Every drawing is random, and no combination is more likely to win because of its past results.</p>
+     </div>
+   </details>
   <details style="margin-top:20px">
-    <summary style="cursor:pointer;color:var(--dim);font-size:14px">Explore past results for all number combinations (click to expand)</summary>
+    <summary style="cursor:pointer;color:var(--dim);font-size:14px">Browse past results (click to expand)</summary>
     <div class="controls" style="margin-top:12px">
       <select id="gameSel"></select>
       <label class="meta">Show <input id="topN" type="number" value="100" min="10" max="300" style="width:70px"> combinations</label>
-      <span class="meta">auto-refreshes</span>
+      <span class="meta">Results update automatically</span>
     </div>
     <div class="statcards" id="cards"></div>
     <table>
       <thead><tr>
-        <th data-k="ticket">Ticket</th>
+        <th data-k="ticket">Numbers</th>
         <th data-k="best_streak">Longest winning streak</th>
         <th data-k="total_wins">Total winning draws</th>
         <th data-k="last_win">Most recent win</th>
