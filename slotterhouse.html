@@ -48,9 +48,9 @@ footer{border-top:1px solid var(--line);padding:20px clamp(18px,4vw,48px);color:
   <article class="card"><h3>Number Ideas</h3><div class="metric" id="assumptionCount">0</div><div class="muted">Separate from past results</div></article>
  </div>
  <div class="grid section">
-  <article class="card"><h2>Drawing Journal</h2><p class="muted">Browse past drawings by date, game, and drawing time.</p><button class="subtle" data-go="journal">View journal</button></article>
-  <article class="card"><h2>Number Review</h2><p class="muted">Review number results from one drawing to the next.</p><button class="subtle" data-go="shapes">View number results</button></article>
-  <article class="card"><h2>Changes Over Time</h2><p class="muted">See a simple summary of how past drawing results changed over time.</p><button class="subtle" data-go="transitions">View changes</button></article>
+  <article class="card"><h2>Drawing Journal</h2><p class="muted">Browse past drawings by date, game, and drawing time.</p></article>
+  <article class="card"><h2>Number Review</h2><p class="muted">Review number results from one drawing to the next.</p></article>
+  <article class="card"><h2>Changes Over Time</h2><p class="muted">See a simple summary of how past drawing results changed over time.</p></article>
  </div>
 </section>
 <div class="adslot" id="ad-mid"><ins class="adsbygoogle"
@@ -80,15 +80,15 @@ footer{border-top:1px solid var(--line);padding:20px clamp(18px,4vw,48px);color:
 </section>
 <section id="imports" class="panelview">
  <div class="card"><h2>Past Drawings</h2><p class="muted">Choose a game and drawing time to browse its past results.</p>
- <p><button class="action" id="loadCsvBtn" type="button">View Drawing History</button> <span class="muted" id="csvStatus" role="status">History not loaded</span></p>
- <div id="csvResults" class="tablewrap muted">Choose a game and drawing time to browse its history in date order.</div>
+ <p><button class="action" id="loadCsvBtn" type="button">Load past drawings</button> <span class="muted" id="csvStatus" role="status">Select this button to display the available games and drawing times.</span></p>
+ <div id="csvResults" class="tablewrap muted">First select “Load past drawings,” then choose a game and drawing time.</div>
  <div class="section" style="display:flex;gap:10px;flex-wrap:wrap;align-items:center">
-  <label for="streamSelect" class="muted">Game and drawing time</label>
+  <label for="streamSelect" class="muted">1. Choose a game and drawing time</label>
   <select id="streamSelect" class="subtle"><option value="">Choose a game</option></select>
-  <button class="subtle" id="loadHistoryBtn" type="button" disabled>Show drawings</button>
-  <button class="subtle" id="loadMoreHistoryBtn" type="button" disabled>Show older drawings</button>
+  <button class="subtle" id="loadHistoryBtn" type="button" disabled>2. Show drawings</button>
+  <button class="subtle" id="loadMoreHistoryBtn" type="button" disabled>Show more drawings</button>
  </div>
- <div id="historyResults" class="tablewrap muted">Choose a game and drawing time to see its past drawings.</div>
+ <div id="historyResults" class="tablewrap muted">Choose a game and drawing time, then select “Show drawings.”</div>
  </div>
 </section>
 <div class="adslot" id="ad-bottom"><ins class="adsbygoogle"
@@ -114,13 +114,13 @@ function selectedStream(){const p=document.getElementById('streamSelect').value.
 async function loadStreamPage(reset){
  const stream=selectedStream();if(!stream)return;const status=document.getElementById('csvStatus'),out=document.getElementById('historyResults');
  const params=new URLSearchParams({game:stream.game,session:stream.session,limit:'500'});if(!reset&&historyCursor)params.set('after',historyCursor);
- status.textContent='Loading drawing history…';const response=await fetch(DATA_API+'/api/session-draws?'+params.toString(),{cache:'no-store'});const payload=await response.json();
+ status.textContent='Loading drawings…';const response=await fetch(DATA_API+'/api/session-draws?'+params.toString(),{cache:'no-store'});const payload=await response.json();
  if(!response.ok||!payload.ok)throw new Error(payload.error||'History API request failed');if(reset)historyRows=[];historyRows=historyRows.concat(payload.draws||[]);historyCursor=payload.nextAfter||null;
  out.innerHTML='<table><thead><tr><th>Date</th><th>Drawn numbers</th></tr></thead><tbody>'+historyRows.map(d=>{let v=d.numbers;try{v=JSON.parse(d.numbers).join(', ')}catch(_){}return '<tr><td>'+d.draw_date+'</td><td style="font-family:monospace">'+v+'</td></tr>'}).join('')+'</tbody></table>';
- document.getElementById('loadMoreHistoryBtn').disabled=!historyCursor;status.textContent=stream.game+' · '+stream.session+' · showing '+historyRows.length+' drawings'+(historyCursor?' · more drawings available':' · all available drawings shown');
+ document.getElementById('loadMoreHistoryBtn').disabled=!historyCursor;status.textContent='Showing '+historyRows.length+' drawings'+(historyCursor?' · select “Show more drawings” to continue':' · all available drawings shown');
 }
 async function loadBatchmateCsvs(){
- const btn=document.getElementById('loadCsvBtn'),status=document.getElementById('csvStatus'),out=document.getElementById('csvResults');btn.disabled=true;status.textContent='Connecting to drawing history…';
+ const btn=document.getElementById('loadCsvBtn'),status=document.getElementById('csvStatus'),out=document.getElementById('csvResults');btn.disabled=true;status.textContent='Loading the list of available games…';
  try{const response=await fetch(DATA_API+'/api/session-draws/summary',{cache:'no-store'});const payload=await response.json();if(!response.ok||!payload.ok)throw new Error(payload.error||'Drawing history is temporarily unavailable');
   streamSummary=payload.streams||[];status.textContent='Ready · '+Number(payload.drawCount).toLocaleString()+' past drawings';document.getElementById('recordCount').textContent=Number(payload.drawCount).toLocaleString();
   document.getElementById('journalCount').textContent='0';document.getElementById('transitionCount').textContent='0';document.getElementById('assumptionCount').textContent='0';
