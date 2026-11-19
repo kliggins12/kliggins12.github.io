@@ -36,13 +36,6 @@ jobs:
         working-directory: cloudflare
         run: npm test
 
-      - name: Apply D1 schema migrations
-        uses: cloudflare/wrangler-action@v3
-        with:
-          apiToken: ${{ secrets.CLOUDFLARE_D1_TOKEN }}
-          workingDirectory: cloudflare
-          command: d1 migrations apply batchmate --remote
-
       - name: Deploy Worker
         uses: cloudflare/wrangler-action@v3
         with:
