@@ -47,35 +47,35 @@
 <header>
   <h1>Batch<span>mate</span></h1>
   <span class="badge">Texas players only</span>
-  <a href="slotterhouse.html" style="display:inline-block;margin-left:10px;color:var(--accent);font-size:13px;font-weight:700;text-decoration:none">Open Slotterhouse ↗</a>
+  <a href="slotterhouse.html" style="display:inline-block;margin-left:10px;color:var(--accent);font-size:13px;font-weight:700;text-decoration:none">Explore Slotterhouse ↗</a>
   <div class="meta" id="genmeta"></div>
-  <span class="refreshnotice" id="refreshNotice" role="status" aria-live="polite">Automatic refresh enabled · checking data time…</span>
+  <span class="refreshnotice" id="refreshNotice" role="status" aria-live="polite">Checking for the latest drawing updates…</span>
 </header>
 <main>
   <div class="meta" id="latestDraws" style="margin-bottom:10px"></div>
-  <h2>Doing well today — best matches on the latest draw</h2>
+  <h2>Closest matches on the latest drawing</h2>
   <div class="tightwrap">
   <table>
     <thead><tr>
-      <th>Game</th><th>Ticket</th><th>Latest match</th><th>Latest draw</th><th>Hit game / session</th>
+      <th>Game</th><th>Number combination</th><th>Closest match</th><th>Drawing date</th><th>Matching game / time</th>
     </tr></thead>
     <tbody id="hotbody"></tbody>
   </table>
   </div>
-  <h2>Readjust — combos that missed the lowest prize on the latest draw</h2>
+  <h2>Alternative combinations to review</h2>
   <div class="tightwrap">
   <table>
     <thead><tr>
-      <th>Game</th><th>Ticket</th><th>Latest match</th><th>Remake</th><th>Remake match</th><th>Latest draw</th><th>Hit game / session</th>
+      <th>Game</th><th>Original combination</th><th>Closest match</th><th>Alternative combination</th><th>Alternative match</th><th>Drawing date</th><th>Matching game / time</th>
     </tr></thead>
     <tbody id="readjbody"></tbody>
   </table>
   </div>
   <p class="meta" style="margin:0 0 14px;font-size:14px;line-height:1.5">
-    <b style="color:var(--gold)">Batchmate</b> ranks tickets by historical win streaks and droughts
-    across official Texas Lottery draw data. <b>Doing well today</b> leads with the best
-    matches on the latest draw; <b>Tightest tickets</b> below shows the latest
-    generated batches — auto-window align picks, rolling rare-piece sets, and
+    <b style="color:var(--gold)">Batchmate</b> compares number combinations with past drawing results
+    across official Texas Lottery draw data. <b>Closest matches</b> shows the strongest matches
+    matches on the latest draw; <b>Ticket lists</b> below show the latest
+    generated batches — number combinations built from recent drawing patterns, and
     Powerball/Mega Millions numbers — for Texas players only.
     Past results do not change the odds of future random draws; every ticket remains equally likely.
     This is a descriptive analysis tool, not a prediction system. Please play responsibly.
@@ -88,7 +88,7 @@
 <script>
      (adsbygoogle = window.adsbygoogle || []).push({});
 </script></div>
-  <h2>Tightest tickets — current generated batches</h2>
+  <h2>Number combinations to review</h2>
   <div class="controls">
     <select id="tightSel"></select>
     <span class="meta" id="status"></span>
@@ -96,7 +96,7 @@
   <div class="tightwrap">
   <table>
     <thead><tr>
-      <th data-tk="ticket">Ticket</th><th data-tk="best">Best match</th><th data-tk="best_date">Best on</th><th data-tk="last">Latest</th><th data-tk="asof">Data thru</th><th data-tk="game">Game</th><th data-tk="detail">Hit game / session</th>
+      <th data-tk="ticket">Number combination</th><th data-tk="best">Closest past match</th><th data-tk="best_date">Date of best match</th><th data-tk="last">Most recent match</th><th data-tk="asof">History through</th><th data-tk="game">Game</th><th data-tk="detail">Matching game / time</th>
     </tr></thead>
     <tbody id="tightbody"></tbody>
   </table>
@@ -110,7 +110,7 @@
      (adsbygoogle = window.adsbygoogle || []).push({});
 </script></div>
   <details style="margin-top:20px">
-    <summary style="cursor:pointer;color:var(--gold);font-size:15px;font-weight:600">How Batchmate works — methodology &amp; honest math (click to expand)</summary>
+    <summary style="cursor:pointer;color:var(--gold);font-size:15px;font-weight:600">How Batchmate works (click to learn more)</summary>
     <div class="meta" style="margin-top:10px;line-height:1.6;font-size:13.5px">
       <p><b>What this is:</b> Batchmate downloads official Texas Lottery draw results for every
       draw game and generates rolling ticket batches. The "Tightest tickets" table shows the
@@ -145,22 +145,22 @@
     </div>
   </details>
   <details style="margin-top:20px">
-    <summary style="cursor:pointer;color:var(--dim);font-size:14px">Streak analysis — all combos by historical streaks (click to expand)</summary>
+    <summary style="cursor:pointer;color:var(--dim);font-size:14px">Explore past results for all number combinations (click to expand)</summary>
     <div class="controls" style="margin-top:12px">
       <select id="gameSel"></select>
-      <label class="meta">show <input id="topN" type="number" value="100" min="10" max="300" style="width:70px"> tickets</label>
+      <label class="meta">Show <input id="topN" type="number" value="100" min="10" max="300" style="width:70px"> combinations</label>
       <span class="meta">auto-refreshes</span>
     </div>
     <div class="statcards" id="cards"></div>
     <table>
       <thead><tr>
         <th data-k="ticket">Ticket</th>
-        <th data-k="best_streak">Best streak</th>
-        <th data-k="total_wins">Total wins</th>
-        <th data-k="last_win">Last win</th>
-        <th data-k="drought">Drought (draws)</th>
-        <th data-k="current_streak">Current streak</th>
-        <th data-k="streak_start">Streak span</th>
+        <th data-k="best_streak">Longest winning streak</th>
+        <th data-k="total_wins">Total winning draws</th>
+        <th data-k="last_win">Most recent win</th>
+        <th data-k="drought">Draws since last win</th>
+        <th data-k="current_streak">Current winning streak</th>
+        <th data-k="streak_start">Winning streak dates</th>
       </tr></thead>
       <tbody id="tbody"></tbody>
     </table>
@@ -183,7 +183,7 @@ let DATA = null, TIGHT = null, sortKey = 'best_streak', sortDir = -1;
 let tightKey = 'best', tightDir = -1;
 
 async function load() {
-  document.getElementById('status').textContent = 'loading data…';
+  document.getElementById('status').textContent = 'Loading drawing results…';
   if (window.BATCHMATE_DATA) {
     DATA = window.BATCHMATE_DATA;
   } else {
@@ -194,14 +194,14 @@ async function load() {
     const tr = await fetch('tight_tickets.json?ts=' + Date.now(), {cache:'no-store'});
     TIGHT = await tr.json();
   } catch (e) { TIGHT = { tickets: [] }; }
-  document.getElementById('genmeta').textContent = 'generated ' + DATA.generated;
+  document.getElementById('genmeta').textContent = 'Updated ' + DATA.generated;
   const notice = document.getElementById('refreshNotice');
-  if (notice) notice.textContent = 'Automatic refresh enabled · data generated ' + DATA.generated;
+  if (notice) notice.textContent = 'Updated automatically · latest results from ' + DATA.generated;
   const sel = document.getElementById('gameSel');
   sel.innerHTML = DATA.games.map((g,i)=>`<option value="${i}">${g.name} — ${g.pick} (${g.n_tickets.toLocaleString()} combos, ${g.n_draws.toLocaleString()} draws)</option>`).join('');
   const games = [...new Set(TIGHT.tickets.map(t=>t.game))];
   document.getElementById('tightSel').innerHTML =
-    '<option value="">all games ('+TIGHT.tickets.length+')</option>' +
+    '<option value="">All games ('+TIGHT.tickets.length+')</option>' +
     games.map(g=>`<option value="${g}">${g} (${TIGHT.tickets.filter(t=>t.game===g).length})</option>`).join('');
   document.getElementById('tightSel').onchange = renderTight;
   const latestDraws = (TIGHT.latest_draws && TIGHT.latest_draws.length) ? TIGHT.latest_draws :
@@ -268,9 +268,9 @@ async function loadLatestDrawsFromCloudflare() {
       target.appendChild(group);
     });
     const notice = document.getElementById('refreshNotice');
-    if (notice) notice.textContent = 'Live draw history connected · ' + payload.count + ' sources';
+    if (notice) notice.textContent = 'Drawing history updated · ' + payload.count + ' sources';
   } catch (error) {
-    target.textContent = 'Cloudflare draw history unavailable: ' + error.message;
+    target.textContent = 'Latest drawing updates are temporarily unavailable: ' + error.message;
     console.error('Batchmate latest draw API failed:', error);
   }
 }
@@ -363,7 +363,7 @@ function renderReadj() {
       <td class="meta">${t.remake_match||'—'}</td>
       <td class="meta">${t.last_draw||'—'}</td>
       <td class="meta">${hitGameSession(t)}</td>
-    </tr>`).join('') || '<tr><td colspan="7" class="meta">no failing combos</td></tr>';
+    </tr>`).join('') || '<tr><td colspan="7" class="meta">No alternative combinations to show</td></tr>';
 }
 
 function game() { return DATA.games[+document.getElementById('gameSel').value]; }
@@ -429,10 +429,10 @@ async function checkForNewData() {
       return;
     }
     const notice = document.getElementById('refreshNotice');
-    if (notice) notice.textContent = 'Waiting for new published data · current build ' + (DATA && DATA.generated || 'unknown');
+    if (notice) notice.textContent = 'Checking for new drawing results · current update ' + (DATA && DATA.generated || 'unknown');
   } catch (error) {
     const notice = document.getElementById('refreshNotice');
-    if (notice) notice.textContent = 'Waiting for published data · last check failed';
+    if (notice) notice.textContent = 'Could not check for new drawing results';
     console.warn('Batchmate update check failed:', error);
   } finally {
     refreshCheckInFlight = false;
@@ -444,7 +444,7 @@ function startDataPolling() {
   if (refreshedBuild && DATA && refreshedBuild === DATA.generated) {
     sessionStorage.removeItem('batchmate-refreshed-build');
     const notice = document.getElementById('refreshNotice');
-    if (notice) notice.textContent = 'New data loaded · automatic refresh stopped';
+    if (notice) notice.textContent = 'New drawing results loaded';
     return;
   }
   refreshTimer = setInterval(checkForNewData, 30*1000);
