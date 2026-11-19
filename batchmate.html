@@ -88,12 +88,22 @@ th,td{text-align:center}
 header h1{font-size:clamp(28px,3.2vw,34px)}
 .adslot{margin:clamp(30px,4.5vh,58px) auto;min-height:110px;width:100%;max-width:1120px}
 
+
+  .title-stack{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:6px;width:100%;flex:0 0 100%;text-align:center}
+  .title-stack h1{display:block;width:100%;margin:0;line-height:1.12;text-align:center}
+  .title-stack .badge{display:inline-block;align-self:center;margin:0}
+  header{display:flex;flex-direction:row;align-items:center;justify-content:center}
+  header .meta,header .refreshnotice{text-align:center}
+  header nav.site-nav{width:100%;justify-content:center}
+
 </style>
 </head>
 <body>
 <header>
-  <h1>Batch<span>mate</span></h1>
-  <span class="badge">Texas players only</span>
+  <div class="title-stack">
+    <h1>Batch<span>mate</span></h1>
+    <span class="badge">Texas players only</span>
+  </div>
   
   <div class="meta" id="genmeta"></div>
   <span class="refreshnotice" id="refreshNotice" role="status" aria-live="polite">Automatic refresh enabled · checking data time…</span>
