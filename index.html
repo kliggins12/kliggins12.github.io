@@ -104,17 +104,17 @@
      (adsbygoogle = window.adsbygoogle || []).push({});
 </script></div>
   <details style="margin-top:20px">
-    <summary style="cursor:pointer;color:var(--gold);font-size:15px;font-weight:600">About these results (click to learn more)</summary>
+    <summary style="cursor:pointer;color:var(--gold);font-size:15px;font-weight:600">About these results — select to read</summary>
     <div class="meta" style="margin-top:10px;line-height:1.6;font-size:13.5px">
        <p>These lists compare number combinations with official past drawings. You can review recent matches, earlier results, and how often combinations have matched before.</p>
        <p>Past results do not predict future drawings. Every drawing is random, and no combination is more likely to win because of its past results.</p>
      </div>
    </details>
   <details style="margin-top:20px">
-    <summary style="cursor:pointer;color:var(--dim);font-size:14px">Browse past results (click to expand)</summary>
+    <summary style="cursor:pointer;color:var(--dim);font-size:14px">Browse past results — select to open</summary>
     <div class="controls" style="margin-top:12px">
-      <select id="gameSel"></select>
-      <label class="meta">Show <input id="topN" type="number" value="100" min="10" max="300" style="width:70px"> combinations</label>
+      <label class="meta" for="gameSel">Choose a game:</label><select id="gameSel" aria-label="Choose a game"></select>
+      <label class="meta">Number of combinations to show: <input id="topN" type="number" value="100" min="10" max="300" style="width:70px"> combinations</label>
       <span class="meta">Results update automatically</span>
     </div>
     <div class="statcards" id="cards"></div>
