@@ -21,7 +21,26 @@ table{width:100%;border-collapse:collapse;min-width:560px}th,td{text-align:left;
 footer{border-top:1px solid var(--line);padding:20px clamp(18px,4vw,48px);color:var(--muted);font-size:13px}
 @media(max-width:600px){header{padding-top:16px}nav{display:grid;grid-template-columns:repeat(2,minmax(0,1fr))}nav button,nav .nav-link{width:100%}.card{padding:15px}}
 
-.pick3-board{display:grid;grid-template-columns:repeat(3,minmax(72px,1fr));gap:5px;max-width:560px;width:100%;margin:0 auto}.pick3-slot{min-height:48px;border:1px solid var(--line);border-radius:8px;background:var(--panel2);display:flex;align-items:center;justify-content:center;position:relative;font-weight:700}.pick3-slot .slotref{position:absolute;left:6px;top:3px;color:var(--muted);font-size:9px;font-weight:500}.pick3-slot.anchor{background:#203653;border-color:#37699b;color:#fff}.pick3-slot.anchor strong{font-size:20px;color:var(--gold)}@media(max-width:500px){.pick3-board{gap:3px}.pick3-slot{min-height:42px}}\n</style>
+.pick3-board{display:grid;grid-template-columns:repeat(3,minmax(72px,1fr));gap:5px;max-width:560px;width:100%;margin:0 auto}.pick3-slot{min-height:48px;border:1px solid var(--line);border-radius:8px;background:var(--panel2);display:flex;align-items:center;justify-content:center;position:relative;font-weight:700}.pick3-slot .slotref{position:absolute;left:6px;top:3px;color:var(--muted);font-size:9px;font-weight:500}.pick3-slot.anchor{background:#203653;border-color:#37699b;color:#fff}.pick3-slot.anchor strong{font-size:20px;color:var(--gold)}@media(max-width:500px){.pick3-board{gap:3px}.pick3-slot{min-height:42px}}
+
+/* Coordinated playful finish */
+body{background:radial-gradient(ellipse at 8% 0%,rgba(98,169,255,.15),transparent 34%),radial-gradient(ellipse at 95% 10%,rgba(255,191,74,.12),transparent 30%),var(--bg)}
+header{background:linear-gradient(120deg,#1a2b45,#111927);box-shadow:0 8px 28px rgba(0,0,0,.22)}
+.brand{font-size:29px}
+nav button,nav .nav-link{transition:transform .16s ease,border-color .16s ease,background .16s ease;box-shadow:0 3px 10px rgba(0,0,0,.14)}
+nav button:hover,nav .nav-link:hover{transform:translateY(-2px);border-color:var(--blue)}
+nav button.active{background:linear-gradient(135deg,#244d78,#293957);border-color:#69b2ff;box-shadow:0 0 0 1px rgba(105,178,255,.14),0 5px 16px rgba(38,104,166,.2)}
+.card{background:linear-gradient(145deg,rgba(31,44,66,.98),rgba(22,31,48,.98));border-color:rgba(104,142,190,.25);box-shadow:0 8px 22px rgba(0,0,0,.16);transition:border-color .16s ease,transform .16s ease}
+.card:hover{border-color:rgba(98,169,255,.55);transform:translateY(-2px)}
+.intro h1{letter-spacing:-.7px}
+.section>h2{padding-left:12px;position:relative}
+.section>h2:before{content:"";position:absolute;left:0;top:2px;bottom:2px;width:4px;border-radius:5px;background:linear-gradient(180deg,var(--blue),var(--gold))}
+.notice{border-left-color:var(--gold);background:linear-gradient(100deg,#2a261e,#211f1b);border-radius:0 12px 12px 0}
+.adslot{border-radius:13px;background:linear-gradient(120deg,rgba(23,35,55,.9),rgba(30,35,53,.9))}
+button:focus-visible,a:focus-visible,select:focus-visible{outline:2px solid #79baff;outline-offset:3px}
+@media(prefers-reduced-motion:reduce){*,*:before,*:after{transition:none!important;scroll-behavior:auto!important}}
+
+</style>
 </head>
 <body>
 <header>
