@@ -1,0 +1,20 @@
+name = "batchmate-data"
+main = "src/index.ts"
+compatibility_date = "2026-11-19"
+workers_dev = true
+
+[triggers]
+crons = ["*/30 * * * *"]
+
+[[d1_databases]]
+binding = "DB"
+database_name = "batchmate"
+database_id = "REPLACE_WITH_CLOUDFLARE_D1_DATABASE_ID"
+migrations_dir = "migrations"
+
+[[r2_buckets]]
+binding = "ARCHIVE"
+bucket_name = "batchmate-source-archive"
+
+[observability]
+enabled = true
