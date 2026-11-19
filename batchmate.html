@@ -296,6 +296,7 @@ function latestDrawMatch(ticket) {
   return 'No latest-draw match recorded';
 }
 function renderHot() {
+  if (!TIGHT || !Array.isArray(TIGHT.tickets)) return;
   const rows = [];
   const byGame = {};
   (TIGHT.tickets||[]).forEach(t=>{
@@ -303,6 +304,10 @@ function renderHot() {
     (byGame[key] = byGame[key] || []).push(t);
   });
   Object.entries(byGame).forEach(([game, tickets])=>{
+    tickets.sort((a,b)=>{
+      const score = t => { const m=String(t.last||'').match(/(\\d+)\\/(\\d+)/); return m ? Number(m[1])/Number(m[2]) : -1; };
+      return score(b)-score(a);
+    });
     tickets.slice(0,3).forEach(t=>rows.push(t));
   });
   document.getElementById('hotbody').innerHTML = rows.map(t=>{
