@@ -119,7 +119,11 @@ export function createInitialPick3Board(session: Pick3Session): Pick3BoardState 
     rows: PICK3_ROWS,
     columns: PICK3_COLUMNS,
     initialAnchors: PICK3_INITIAL_ANCHORS,
-    markings: [],
+    markings: [
+      { id: "pick3-initial-anchor-1", position: { row: 0, column: 0 }, kind: "initial-anchor", value: 0, createdByDrawId: "initial" },
+      { id: "pick3-initial-anchor-2", position: { row: 0, column: 1 }, kind: "initial-anchor", value: 0, createdByDrawId: "initial" },
+      { id: "pick3-initial-anchor-3", position: { row: 0, column: 2 }, kind: "initial-anchor", value: 0, createdByDrawId: "initial" }
+    ],
     asOfDrawId: null,
     asOfDate: null,
     revision: 0
