@@ -31,17 +31,11 @@
 <main>
   <div class="badge">Texas players only</div>
   <h1>Batch<span>mate</span></h1>
-  <p class="dim">Data refreshed automatically after every official Texas Lottery drawing.</p>
+  <p class="dim">Past drawing results are updated as new results become available.</p>
 
-  <h2>What Batchmate does</h2>
-  <p>Batchmate is a free analysis tool for Texas Lottery players. It downloads the official
-  historical draw results for every Texas draw game, then generates rolling ticket batches and
-  ranks every possible combination by how it has behaved across the full record — win streaks,
-  droughts, and the closest it has ever come to matching a real draw.</p>
-  <p>The goal is simple: instead of staring at 1.3 million All or Nothing combinations or
-  thousands of Cash Five lines, the tool surfaces a small, explainable set of "tightest"
-  tickets each day — picks built from recent frequency patterns, absent numbers, and
-  odd/even structure, each labeled with the rules and window size that produced it.</p>
+  <h2>About Batchmate</h2>
+  <p>Batchmate helps you explore Texas Lottery games by putting number combinations and past drawing results in one place. Review recent matches, browse earlier results, and see how combinations have compared over time.</p>
+  <p>Drawing results are updated as new official results become available.</p>
 
   <div class="adslot" id="ad-top">ADVERTISEMENT</div>
 
@@ -58,44 +52,18 @@
     <tr><td>Mega Millions</td><td>5 of 70 + MB</td><td>Tue &amp; Fri</td></tr>
   </table>
 
-  <h2>How Batchmate creates its number lists</h2>
-  <p>For All or Nothing — the flagship game — every ticket is a canonical half of the 24-number
-  pool: since a draw and its complement are equivalent, only combinations containing the number 1
-  need to be tracked (1,352,078 of them). The generator applies an explicit rule engine to a
-  sliding window of recent draws:</p>
-  <ul>
-    <li><b>Absent anchors</b> — numbers that have not appeared anywhere in the window are kept,
-      on the theory that coverage gaps are the most distinctive signal available.</li>
-    <li><b>Frequency bands</b> — when every number has appeared, the tool keeps a band of numbers
-      sitting at a similar draw-count level and fills the rest from hot and warm numbers.</li>
-    <li><b>Parity signatures</b> — the 1–24 pool splits evenly into 12 odd and 12 even numbers,
-      and common draw signatures like 7-odd/5-even are preserved or mirrored deliberately.</li>
-    <li><b>Auto window sizing</b> — the engine scans window sizes from large to small and keeps
-      whichever depth scores best for each draw session, labeling every ticket with its window
-      (for example <code>night W=6</code>).</li>
-  </ul>
-  <p>The other games use the same rolling philosophy: recent-window frequency bands, rare-number
-  anchors, and box matching for the digit games. Powerball and Mega Millions use era-aware
-  filtering so only draws under the current number matrix are counted.</p>
+  <h2>About the number lists</h2>
+  <p>The number lists are provided to help you review and organize combinations. They are based on past drawing results and are not predictions of future outcomes.</p>
 
   <div class="adslot" id="ad-mid">ADVERTISEMENT</div>
 
   <h2>Understanding the results</h2>
-  <ul>
-    <li><b>Best match</b> — the closest this exact ticket has ever come to a real draw
-      (<code>11/12</code> on All or Nothing is the $500 tier; <code>4/5+B</code> means four mains
-      plus the bonus on Texas Two Step or Powerball).</li>
-    <li><b>Date of best match</b> — the most recent date that best match occurred.</li>
-    <li><b>History through</b> — the latest official draw included in the analysis.</li>
-    <li><b>How this combination was selected</b> — which rule, window, and historical counts produced the ticket.</li>
-  </ul>
-  <p>The collapsed "Past winning streaks" section at the bottom ranks every possible combination by
-  its longest historical win streak and current drought — useful for browsing, but remember it
-  describes the past.</p>
+  <p>Use the results to compare number combinations with previous drawings. Dates show when a match occurred, and the history date shows how recent the information is.</p>
+  <p>Past results describe what has already happened. They do not change the odds of future drawings.</p>
 
   <div class="adslot" id="ad-bottom">ADVERTISEMENT</div>
 
-  <h2>The honest math</h2>
+  <h2>A quick reminder</h2>
   <p>Lottery draws are independent random events. No historical pattern — not a streak, a drought,
   a frequency band, or a ticket that once matched 11 of 12 — changes the probability of the next
   draw. Batchmate is a <i>descriptive</i> tool: it shows you which tickets have structurally
@@ -108,7 +76,7 @@
   Council on Problem Gambling</a> (1-800-522-4700) can help.</p>
 
   <a class="btn" href="/">View Batchmate &rarr;</a>
-  <p class="dim" style="margin-top:30px">Batchmate · unofficial analysis tool · not affiliated with the Texas Lottery</p>
+  <p class="dim" style="margin-top:30px">Batchmate is an independent site and is not affiliated with the Texas Lottery.</p>
 </main>
 </body>
 </html>
