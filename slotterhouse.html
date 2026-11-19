@@ -26,7 +26,7 @@ footer{border-top:1px solid var(--line);padding:20px clamp(18px,4vw,48px);color:
 <header>
  <div class="top"><div class="brand">Slotter<span>house</span></div><a href="./" style="color:#62a9ff;text-decoration:none;font-weight:700">← Back to Batchmate</a><span class="tag">BATCHMATE ANALYSIS</span></div>
  <nav aria-label="Slotterhouse sections">
-  <button class="active" data-view="overview">Home</button><button data-view="walkthrough">Board Replay</button><button data-view="journal">Drawing Journal</button><button data-view="shapes">Board Patterns</button><button data-view="transitions">Board Changes</button><button data-view="assumptions">Next-Draw Ideas</button><button data-view="imports">Past Drawings</button>
+  <button class="active" data-view="overview">Home</button><button data-view="walkthrough">Chronological Walkthrough</button><button data-view="journal">Drawing Journal</button><button data-view="shapes">Board Patterns</button><button data-view="transitions">Board Changes</button><button data-view="assumptions">Next-Draw Ideas</button><button data-view="imports">Past Drawings</button>
  </nav>
 </header>
 <main>
@@ -63,31 +63,11 @@ footer{border-top:1px solid var(--line);padding:20px clamp(18px,4vw,48px);color:
 </script></div>
 <section id="walkthrough" class="panelview">
  <div class="card">
-  <h2>Pick 3 — step-by-step board replay</h2>
-  <p class="muted">The Pick 3 board has 10 rows and 3 columns. It starts with one zero marking at the top of each column. This view follows where the markings sit and move on the board; it does not score the drawn digits.</p>
-  <div class="grid section" style="grid-template-columns:repeat(3,minmax(0,1fr));gap:8px">
-   <div class="notice" style="border-left-color:var(--blue)"><b>Column 1</b><br><span class="muted">Starting mark: 0</span></div>
-   <div class="notice" style="border-left-color:var(--blue)"><b>Column 2</b><br><span class="muted">Initial anchor: 0</span></div>
-   <div class="notice" style="border-left-color:var(--blue)"><b>Column 3</b><br><span class="muted">Initial anchor: 0</span></div>
+  <h2>Chronological Walkthrough</h2>
+  <p class="muted">Follow the numbers in the order they appear, from the beginning to the latest drawing.</p>
+  <div class="tablewrap">
+   <div id="pick3BoardPreview" class="pick3-board" role="img" aria-label="Pick 3 number board"></div>
   </div>
-  <div class="section">
-   <div style="display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;margin-bottom:10px">
-    <h3 style="margin:0">Starting board</h3>
-    <span class="pill">Pick 3 · 10 × 3 · 30 slots</span>
-   </div>
-   <div class="tablewrap">
-    <div id="pick3BoardPreview" class="pick3-board" role="img" aria-label="Pick 3 initial board with three zero anchors in the top row"></div>
-   </div>
-   <div class="muted" style="font-size:12px;margin-top:8px">The board is read from top to bottom. Each column is tracked separately.</div>
-  </div>
-  <div class="notice section">
-   <b>Replay progress:</b> The starting board is set. Step-by-step history, before-draw examples, comparisons with actual board markings, and updates for the next drawing are not available yet. No past performance is being claimed.
-  </div>
- </div>
- <div class="grid section">
-  <article class="card"><h3>Chain movement</h3><p class="muted">A new mark takes the selected space. The marks it displaces move along the column by the selected number of spaces, wrapping around at the end.</p></article>
-  <article class="card"><h3>Move a full column</h3><p class="muted">Move every marking in one column by the selected number of spaces. The other columns stay as they are.</p></article>
-  <article class="card"><h3>Swap two markings</h3><p class="muted">Trade the positions of two selected markings. All other markings stay where they are.</p></article>
  </div>
 </section>
 <section id="journal" class="panelview">
@@ -166,7 +146,7 @@ document.getElementById('streamSelect').addEventListener('change',()=>{historyCu
  for(let row=0;row<10;row++){
   for(let column=0;column<3;column++){
    const anchor=row===0;
-   cells.push('<div class="pick3-slot'+(anchor?' anchor':'')+'" aria-label="Row '+(row+1)+', column '+(column+1)+(anchor?', initial zero anchor':' empty')+'"><span class="slotref">R'+(row+1)+'·C'+(column+1)+'</span>'+(anchor?'<strong>0</strong>':'')+'</div>');
+   cells.push('<div class="pick3-slot'+(anchor?' anchor':'')+'">'+(anchor?'<strong>0</strong>':'')+'</div>');
   }
  }
  host.innerHTML=cells.join('');
