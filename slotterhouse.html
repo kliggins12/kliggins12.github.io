@@ -27,7 +27,7 @@ footer{border-top:1px solid var(--line);padding:20px clamp(18px,4vw,48px);color:
 <header>
  <div class="top"><div class="brand">Slotter<span>house</span></div></div>
  <nav aria-label="Slotterhouse sections">
-  <button class="active" data-view="overview">Home</button><button data-view="walkthrough">Chronological Walkthrough</button><button data-view="journal">Drawing Journal</button><button data-view="shapes">Board Patterns</button><button data-view="transitions">Board Changes</button><button data-view="assumptions">Next-Draw Ideas</button><button data-view="imports">Past Drawings</button>
+  <button class="active" data-view="overview">Slotterhouse</button><button data-view="walkthrough">Chronological Walkthrough</button><button data-view="journal">Drawing Journal</button><button data-view="shapes">Board Patterns</button><button data-view="transitions">Board Changes</button><button data-view="assumptions">Next-Draw Ideas</button><button data-view="imports">Past Drawings</button>
  </nav>
 </header>
 <main>
@@ -103,7 +103,7 @@ footer{border-top:1px solid var(--line);padding:20px clamp(18px,4vw,48px);color:
 </main>
 <footer>Past drawing results are for reference only. Every drawing is random, and previous results do not change future odds.</footer>
 <script>
-const labels={overview:'Drawing Overview',journal:'Drawing Journal',shapes:'Number Review',transitions:'Changes Over Time',assumptions:'Number Ideas',imports:'Past Drawings'};
+const labels={overview:'Drawing Overview',walkthrough:'Chronological Walkthrough',journal:'Drawing Journal',shapes:'Number Review',transitions:'Changes Over Time',assumptions:'Number Ideas',imports:'Past Drawings'};
 function show(view){document.querySelectorAll('.panelview').forEach(x=>x.classList.toggle('active',x.id===view));document.querySelectorAll('nav button').forEach(x=>x.classList.toggle('active',x.dataset.view===view));document.getElementById('pageTitle').textContent=labels[view]||labels.overview;location.hash=view;}
 document.querySelectorAll('nav button').forEach(b=>b.addEventListener('click',()=>show(b.dataset.view)));
 document.querySelectorAll('[data-go]').forEach(b=>b.addEventListener('click',()=>show(b.dataset.go)));
