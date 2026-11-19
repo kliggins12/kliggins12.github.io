@@ -1,6 +1,12 @@
 name: Deploy Batchmate Cloudflare Worker
 
 on:
+  push:
+    branches:
+      - master
+    paths:
+      - 'cloudflare/**'
+      - '.github/workflows/deploy-worker.yml'
   workflow_dispatch:
 
 permissions:
