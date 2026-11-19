@@ -32,6 +32,10 @@ jobs:
         working-directory: cloudflare
         run: npm run typecheck
 
+      - name: Run Pick 3 replay regression tests
+        working-directory: cloudflare
+        run: npm test
+
       - name: Deploy Worker
         uses: cloudflare/wrangler-action@v3
         with:
