@@ -56,6 +56,97 @@ function json(data: unknown, status = 200): Response {
   });
 }
 
+
+
+type ParsedDraw = { drawDate: string; numbers: number[] };
+
+function parseCsvRows(input: string): string[][] {
+  const rows: string[][] = [];
+  let row: string[] = [], field = "", quoted = false;
+  for (let i = 0; i < input.length; i++) {
+    const ch = input[i];
+    if (quoted) {
+      if (ch === '"' && input[i + 1] === '"') { field += '"'; i++; }
+      else if (ch === '"') quoted = false;
+      else field += ch;
+    } else if (ch === '"') quoted = true;
+    else if (ch === ",") { row.push(field); field = ""; }
+    else if (ch === "\n") {
+      row.push(field.replace(/\r$/, "")); field = "";
+      if (row.some((v) => v.trim() !== "")) rows.push(row);
+      row = [];
+    } else field += ch;
+  }
+  if (field.length || row.length) {
+    row.push(field.replace(/\r$/, ""));
+    if (row.some((v) => v.trim() !== "")) rows.push(row);
+  }
+  return rows;
+}
+
+function expectedNumbers(source: Source): number {
+  if (source.game === "All or Nothing") return 12;
+  if (source.game === "Pick 3") return 3;
+  if (source.game === "Daily 4") return 4;
+  if (source.game === "Cash Five") return 5;
+  return 6; // Texas Two Step, Lotto Texas, Powerball, Mega Millions
+}
+
+function parseSourceDraws(csv: string, source: Source): ParsedDraw[] {
+  const rows = parseCsvRows(csv);
+  const parsed: ParsedDraw[] = [];
+  const count = expectedNumbers(source);
+  const isLouisiana = source.game === "Powerball" || source.game === "Mega Millions";
+
+  for (const row of rows.slice(1)) {
+    let drawDate: string;
+    let rawNumbers: string[];
+    if (isLouisiana) {
+      const date = (row[0] || "").trim();
+      if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) continue;
+      drawDate = date;
+      rawNumbers = row.slice(1, 1 + count);
+    } else {
+      const month = Number(row[1]), day = Number(row[2]), year = Number(row[3]);
+      if (!Number.isInteger(month) || !Number.isInteger(day) || !Number.isInteger(year) ||
+          month < 1 || month > 12 || day < 1 || day > 31 || year < 1900) continue;
+      drawDate = `${String(year).padStart(4, "0")}-${String(month).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
+      rawNumbers = row.slice(4, 4 + count);
+    }
+    if (rawNumbers.length !== count) continue;
+    const numbers = rawNumbers.map((v) => Number(v.trim()));
+    if (numbers.some((n) => !Number.isInteger(n) || n < 0)) continue;
+    parsed.push({ drawDate, numbers });
+  }
+  return parsed;
+}
+
+async function reindexSource(env: Env, source: Source): Promise<{ filename: string; imported: number }> {
+  const record = await env.DB.prepare("SELECT r2_key,sha256 FROM source_files WHERE filename=?")
+    .bind(source.filename).first<{ r2_key: string; sha256: string }>();
+  if (!record) throw new Error(`No archived source found for ${source.filename}`);
+  const object = await env.ARCHIVE.get(record.r2_key);
+  if (!object) throw new Error(`Archived CSV is missing for ${source.filename}`);
+  const csv = await object.text();
+  const draws = parseSourceDraws(csv, source);
+  if (draws.length === 0) throw new Error(`No valid draw rows parsed from ${source.filename}; existing history was left unchanged`);
+
+  const importedAt = new Date().toISOString();
+  const statements = draws.map((draw) => env.DB.prepare(`
+    INSERT INTO draws(source_filename,game,session,draw_date,numbers_json,source_sha256,imported_at)
+    VALUES(?,?,?,?,?,?,?)
+    ON CONFLICT(source_filename,draw_date) DO UPDATE SET
+      game=excluded.game, session=excluded.session, numbers_json=excluded.numbers_json,
+      source_sha256=excluded.source_sha256, imported_at=excluded.imported_at
+  `).bind(source.filename, source.game, source.session, draw.drawDate,
+    JSON.stringify(draw.numbers), record.sha256, importedAt));
+
+  for (let i = 0; i < statements.length; i += 50) {
+    await env.DB.batch(statements.slice(i, i + 50));
+  }
+  return { filename: source.filename, imported: draws.length };
+}
+
 async function ingest(env: Env): Promise<{ updated: number; unchanged: number; errors: string[] }> {
   const started = new Date().toISOString();
   const run = await env.DB.prepare(
@@ -136,6 +227,44 @@ export default {
       return new Response(object.body, {
         headers: { "content-type": "text/csv; charset=utf-8", "cache-control": "public, max-age=300", etag: object.httpEtag }
       });
+    }
+
+    if (url.pathname === "/api/draws/latest") {
+      const result = await env.DB.prepare(`
+        SELECT d.source_filename,d.game,d.session,d.draw_date,d.numbers_json
+        FROM draws d
+        INNER JOIN (
+          SELECT source_filename,MAX(draw_date) AS max_date FROM draws GROUP BY source_filename
+        ) latest ON latest.source_filename=d.source_filename AND latest.max_date=d.draw_date
+        ORDER BY d.game,d.session
+      `).all();
+      return json({ count: result.results.length, draws: result.results });
+    }
+
+    if (url.pathname === "/api/draws") {
+      const game = url.searchParams.get("game");
+      const session = url.searchParams.get("session");
+      const limit = Math.min(500, Math.max(1, Number(url.searchParams.get("limit") || 100)));
+      const before = url.searchParams.get("before");
+      let query = "SELECT source_filename,game,session,draw_date,numbers_json FROM draws WHERE 1=1";
+      const values: (string | number)[] = [];
+      if (game) { query += " AND game=?"; values.push(game); }
+      if (session) { query += " AND session=?"; values.push(session); }
+      if (before) { query += " AND draw_date<?"; values.push(before); }
+      query += " ORDER BY draw_date DESC,source_filename LIMIT ?";
+      values.push(Number.isFinite(limit) ? limit : 100);
+      const result = await env.DB.prepare(query).bind(...values).all();
+      return json({ count: result.results.length, draws: result.results });
+    }
+
+    if (url.pathname === "/api/admin/reindex" && request.method === "POST") {
+      const token = request.headers.get("authorization");
+      if (!env.API_TOKEN || token !== `Bearer ${env.API_TOKEN}`) return json({ error: "Unauthorized" }, 401);
+      const filename = url.searchParams.get("file");
+      const source = TX.find((s) => s.filename === filename);
+      if (!source) return json({ error: "Supply one valid source filename using ?file=" + TX.map((s) => s.filename).join(",") }, 400);
+      try { return json({ ok: true, ...(await reindexSource(env, source)) }); }
+      catch (error) { return json({ ok: false, error: error instanceof Error ? error.message : String(error) }, 502); }
     }
 
     if (url.pathname === "/api/admin/ingest" && request.method === "POST") {
