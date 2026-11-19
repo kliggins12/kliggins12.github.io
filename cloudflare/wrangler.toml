@@ -10,7 +10,7 @@ crons = ["*/30 * * * *"]
 [[d1_databases]]
 binding = "DB"
 database_name = "batchmate"
-database_id = "REPLACE_WITH_CLOUDFLARE_D1_DATABASE_ID"
+database_id = "1180909a-5bac-4747-87ce-e3293fe61163"
 migrations_dir = "migrations"
 
 [[r2_buckets]]
