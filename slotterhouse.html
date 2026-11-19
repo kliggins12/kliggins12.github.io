@@ -20,13 +20,13 @@ table{width:100%;border-collapse:collapse;min-width:560px}th,td{text-align:left;
 .panelview{display:none}.panelview.active{display:block}.field{display:block;width:100%;background:var(--panel2);border:1px dashed #536580;border-radius:10px;padding:20px;color:var(--muted);margin:12px 0}.field input{max-width:100%}
 footer{border-top:1px solid var(--line);padding:20px clamp(18px,4vw,48px);color:var(--muted);font-size:13px}
 @media(max-width:600px){header{padding-top:16px}nav{display:grid;grid-template-columns:repeat(2,minmax(0,1fr))}nav button{width:100%}.card{padding:15px}}
-</style>
+\n.pick3-board{display:grid;grid-template-columns:repeat(3,minmax(72px,1fr));gap:5px;max-width:560px;margin:0 auto}.pick3-slot{min-height:48px;border:1px solid var(--line);border-radius:8px;background:var(--panel2);display:flex;align-items:center;justify-content:center;position:relative;font-weight:700}.pick3-slot .slotref{position:absolute;left:6px;top:3px;color:var(--muted);font-size:9px;font-weight:500}.pick3-slot.anchor{background:#203653;border-color:#37699b;color:#fff}.pick3-slot.anchor strong{font-size:20px;color:var(--gold)}@media(max-width:500px){.pick3-board{gap:3px}.pick3-slot{min-height:42px}}\n</style>
 </head>
 <body>
 <header>
  <div class="top"><div class="brand">Slotter<span>house</span></div><a href="./" style="color:#62a9ff;text-decoration:none;font-weight:700">← Back to Batchmate</a><span class="tag">BATCHMATE ANALYSIS</span></div>
  <nav aria-label="Slotterhouse sections">
-  <button class="active" data-view="overview">Overview</button><button data-view="journal">Piece Journal</button><button data-view="shapes">Shape Tracking</button><button data-view="transitions">Transitions</button><button data-view="assumptions">Assumptions</button><button data-view="imports">Data Imports</button>
+  <button class="active" data-view="overview">Overview</button><button data-view="walkthrough">Walkthrough</button><button data-view="journal">Piece Journal</button><button data-view="shapes">Shape Tracking</button><button data-view="transitions">Transitions</button><button data-view="assumptions">Assumptions</button><button data-view="imports">Data Imports</button>
  </nav>
 </header>
 <main>
@@ -61,6 +61,35 @@ footer{border-top:1px solid var(--line);padding:20px clamp(18px,4vw,48px);color:
 <script>
      (adsbygoogle = window.adsbygoogle || []).push({});
 </script></div>
+<section id="walkthrough" class="panelview">
+ <div class="card">
+  <h2>Pick 3 — chronological board walkthrough</h2>
+  <p class="muted">Confirmed board geometry: 10 rows × 3 columns. The starting state places a zero anchor in each of the three top-row slots. The board records markings by position; the drawn digits are not the focus of this view.</p>
+  <div class="grid section" style="grid-template-columns:repeat(3,minmax(0,1fr));gap:8px">
+   <div class="notice" style="border-left-color:var(--blue)"><b>Column 1</b><br><span class="muted">Initial anchor: 0</span></div>
+   <div class="notice" style="border-left-color:var(--blue)"><b>Column 2</b><br><span class="muted">Initial anchor: 0</span></div>
+   <div class="notice" style="border-left-color:var(--blue)"><b>Column 3</b><br><span class="muted">Initial anchor: 0</span></div>
+  </div>
+  <div class="section">
+   <div style="display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;margin-bottom:10px">
+    <h3 style="margin:0">Initial board state</h3>
+    <span class="pill">Pick 3 · 10 × 3 · 30 slots</span>
+   </div>
+   <div class="tablewrap">
+    <div id="pick3BoardPreview" class="pick3-board" role="img" aria-label="Pick 3 initial board with three zero anchors in the top row"></div>
+   </div>
+   <div class="muted" style="font-size:12px;margin-top:8px">Rows run from top to bottom. Columns 1–3 remain separate marking lanes.</div>
+  </div>
+  <div class="notice section">
+   <b>Replay status:</b> Starting board defined. Historical stepping, mock assumptions, actual-marking comparison, and rolling adjustment will activate after the draw-to-marking strategy is implemented and replay history is generated. No historical performance is being claimed yet.
+  </div>
+ </div>
+ <div class="grid section">
+  <article class="card"><h3>Cascade displacement</h3><p class="muted">An incoming marking takes the target slot; the displaced marking chain advances by the attacker's value with circular row wrap.</p></article>
+  <article class="card"><h3>Whole-column rotation</h3><p class="muted">Rotate markings in one selected column by a selected value, with circular wrap. Other columns remain unchanged.</p></article>
+  <article class="card"><h3>Piece-only swap</h3><p class="muted">Exchange two selected markings at their exact positions. Unrelated board markings stay fixed.</p></article>
+ </div>
+</section>
 <section id="journal" class="panelview">
  <div class="card"><h2>Piece Journal</h2><p class="muted">The journal will preserve source provenance, original ordering, date, game, session, parser version, and game-rule version. Historical observations are immutable; repeat imports must be idempotent.</p><div class="notice">Waiting for the versioned CSV import and record schema.</div></div>
 </section>
@@ -138,6 +167,22 @@ async function loadBatchmateCsvs(){
  finally{btn.disabled=false;}
 }
 document.getElementById('loadCsvBtn').addEventListener('click',loadBatchmateCsvs);
+
+// Render the confirmed Pick 3 baseline board. This view is intentionally
+// data-honest: only the three agreed starting anchors are marked at this stage.
+(function renderPick3InitialBoard(){
+ const host=document.getElementById('pick3BoardPreview');
+ if(!host)return;
+ const cells=[];
+ for(let row=0;row<10;row++){
+  for(let column=0;column<3;column++){
+   const anchor=row===0;
+   cells.push('<div class="pick3-slot'+(anchor?' anchor':'')+'" aria-label="Row '+(row+1)+', column '+(column+1)+(anchor?', initial zero anchor':' empty')+'"><span class="slotref">R'+(row+1)+'·C'+(column+1)+'</span>'+(anchor?'<strong>0</strong>':'')+'</div>');
+  }
+ }
+ host.innerHTML=cells.join('');
+})();
+
 
 </script>
 </body>
