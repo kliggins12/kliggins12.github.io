@@ -5,7 +5,8 @@
   "scripts": {
     "dev": "wrangler dev",
     "deploy": "wrangler deploy",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "test": "rm -rf /tmp/batchmate-pick3-test-build && tsc src/analysis/pick3.ts src/analysis/pick3-movements.ts src/analysis/pick3-replay.ts --target ES2022 --module commonjs --moduleResolution node --rootDir src --outDir /tmp/batchmate-pick3-test-build --skipLibCheck && PICK3_BUILD_DIR=/tmp/batchmate-pick3-test-build node --test test/pick3.test.cjs"
   },
   "devDependencies": {
     "@cloudflare/workers-types": "^5.20261118.1",
