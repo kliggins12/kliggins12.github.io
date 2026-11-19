@@ -11,10 +11,11 @@ import {
   type Marking,
   type Pick3BoardState,
   type Pick3Draw,
+  type Pick3DrawTarget,
   type Pick3Session
 } from "./pick3";
 
-export type Pick3Target = Pick<Pick3Draw, "id" | "session" | "date">;
+export type Pick3Target = Pick3DrawTarget;
 
 export type Pick3Projection = {
   projectedMarkings: Marking[];
@@ -100,7 +101,7 @@ export function replayPick3Session(args: {
       ? rollPick3Assumption({
           id: assumptionId,
           nextBoard: board,
-          nextTarget: draw,
+          nextTarget: target,
           previousAssumption,
           projectedMarkings: projection.projectedMarkings,
           proposedChanges: projection.changes,
@@ -109,7 +110,7 @@ export function replayPick3Session(args: {
       : freezePick3Assumption({
           id: assumptionId,
           board,
-          target: draw,
+          target,
           projectedMarkings: projection.projectedMarkings,
           proposedChanges: projection.changes,
           createdAt
