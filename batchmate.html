@@ -1,0 +1,376 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="google-adsense-account" content="ca-pub-7028777519947527">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Batchmate — Texas Lottery Ticket Analyzer</title>
+<script async src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-7028777519947527"
+     crossorigin="anonymous"></script>
+<style>
+  :root { --bg:#0f1420; --panel:#1a2130; --accent:#4da3ff; --gold:#ffc857; --text:#e8ecf4; --dim:#8b96ad; }
+  * { box-sizing:border-box; }
+  body { margin:0; background:var(--bg); color:var(--text); font:15px/1.45 system-ui,sans-serif; }
+  header { padding:18px 22px; border-bottom:1px solid #2a3450; display:flex; align-items:baseline; gap:14px; flex-wrap:wrap; }
+  h1 { margin:0; font-size:22px; letter-spacing:.5px; }
+  h1 span { color:var(--accent); }
+  .meta { color:var(--dim); font-size:13px; }
+  main { padding:18px 22px; max-width:1200px; margin:0 auto; }
+  .controls { display:flex; gap:10px; flex-wrap:wrap; margin-bottom:14px; align-items:center; }
+  select, input, button { background:var(--panel); color:var(--text); border:1px solid #34405e; border-radius:8px; padding:8px 12px; font-size:14px; }
+  button { cursor:pointer; background:#22304d; }
+  button:hover { border-color:var(--accent); }
+  .refreshnotice { display:inline-flex; align-items:center; gap:7px; background:#142b27; border:1px solid #286354; border-radius:20px; padding:6px 11px; color:#a8e6d2; font-size:12px; white-space:normal; }
+  .refreshnotice::before { content:""; width:7px; height:7px; border-radius:50%; background:#55c99a; flex:0 0 auto; }
+  .statcards { display:flex; gap:10px; flex-wrap:wrap; margin-bottom:14px; }
+  .card { background:var(--panel); border:1px solid #2a3450; border-radius:10px; padding:10px 16px; min-width:130px; }
+  .card b { display:block; font-size:18px; color:var(--accent); }
+  .card span { color:var(--dim); font-size:12px; }
+  table { width:100%; border-collapse:collapse; background:var(--panel); border-radius:10px; overflow:hidden; }
+  th, td { padding:8px 12px; text-align:left; border-bottom:1px solid #242d42; font-size:14px; }
+  th { background:#141b2b; color:var(--dim); font-size:12px; text-transform:uppercase; letter-spacing:.5px; cursor:pointer; user-select:none; }
+  th:hover { color:var(--text); }
+  tr:hover td { background:#1e2740; }
+  .ticket { font-family:ui-monospace,monospace; font-weight:600; color:var(--gold); }
+  .streak { color:var(--accent); font-weight:600; }
+  .warn { color:#ff9d6b; }
+  .disclaimer { margin-top:16px; color:var(--dim); font-size:12.5px; border-top:1px solid #2a3450; padding-top:12px; }
+  .loading { color:var(--dim); padding:40px; text-align:center; }
+  .badge { background:#7a2d0d; color:#ffd9b3; border:1px solid #a34a1f; border-radius:20px; padding:3px 12px; font-size:12px; font-weight:700; letter-spacing:.5px; text-transform:uppercase; }
+  h2 { font-size:16px; margin:22px 0 10px; color:var(--gold); }
+  .tightwrap { overflow-x:auto; }
+  .adslot { margin:14px 0; padding:10px; background:#141b2b; border:1px dashed #34405e; border-radius:10px; text-align:center; color:var(--dim); font-size:12px; min-height:90px; display:flex; align-items:center; justify-content:center; }
+  .adslot ins, .adslot iframe { display:block; margin:0 auto; }
+</style>
+</head>
+<body>
+<header>
+  <h1>Batch<span>mate</span></h1>
+  <span class="badge">Texas players only</span>
+  <a href="slotterhouse.html" style="display:inline-block;margin-left:10px;color:var(--accent);font-size:13px;font-weight:700;text-decoration:none">Open Slotterhouse ↗</a>
+  <div class="meta" id="genmeta"></div>
+  <span class="refreshnotice" id="refreshNotice" role="status" aria-live="polite">Automatic refresh enabled · checking data time…</span>
+</header>
+<main>
+  <div class="meta" id="latestDraws" style="margin-bottom:10px"></div>
+  <h2>Doing well today — best matches on the latest draw</h2>
+  <div class="tightwrap">
+  <table>
+    <thead><tr>
+      <th>Game</th><th>Ticket</th><th>Latest match</th><th>Latest draw</th><th>Hit game / session</th>
+    </tr></thead>
+    <tbody id="hotbody"></tbody>
+  </table>
+  </div>
+  <h2>Readjust — combos that missed the lowest prize on the latest draw</h2>
+  <div class="tightwrap">
+  <table>
+    <thead><tr>
+      <th>Game</th><th>Ticket</th><th>Latest match</th><th>Remake</th><th>Remake match</th><th>Latest draw</th><th>Hit game / session</th>
+    </tr></thead>
+    <tbody id="readjbody"></tbody>
+  </table>
+  </div>
+  <p class="meta" style="margin:0 0 14px;font-size:14px;line-height:1.5">
+    <b style="color:var(--gold)">Batchmate</b> ranks tickets by historical win streaks and droughts
+    across official Texas Lottery draw data. <b>Doing well today</b> leads with the best
+    matches on the latest draw; <b>Tightest tickets</b> below shows the latest
+    generated batches — auto-window align picks, rolling rare-piece sets, and
+    Powerball/Mega Millions numbers — for Texas players only.
+    Past results do not change the odds of future random draws; every ticket remains equally likely.
+    This is a descriptive analysis tool, not a prediction system. Please play responsibly.
+  </p>
+  <div class="adslot" id="ad-top"><ins class="adsbygoogle"
+     style="display:block"
+     data-ad-format="autorelaxed"
+     data-ad-client="ca-pub-7028777519947527"
+     data-ad-slot="8355645812"></ins>
+<script>
+     (adsbygoogle = window.adsbygoogle || []).push({});
+</script></div>
+  <h2>Tightest tickets — current generated batches</h2>
+  <div class="controls">
+    <select id="tightSel"></select>
+    <span class="meta" id="status"></span>
+  </div>
+  <div class="tightwrap">
+  <table>
+    <thead><tr>
+      <th data-tk="ticket">Ticket</th><th data-tk="best">Best match</th><th data-tk="best_date">Best on</th><th data-tk="last">Latest</th><th data-tk="asof">Data thru</th><th data-tk="game">Game</th><th data-tk="detail">Hit game / session</th>
+    </tr></thead>
+    <tbody id="tightbody"></tbody>
+  </table>
+  </div>
+  <div class="adslot" id="ad-mid"><ins class="adsbygoogle"
+     style="display:block"
+     data-ad-format="autorelaxed"
+     data-ad-client="ca-pub-7028777519947527"
+     data-ad-slot="8355645812"></ins>
+<script>
+     (adsbygoogle = window.adsbygoogle || []).push({});
+</script></div>
+  <details style="margin-top:20px">
+    <summary style="cursor:pointer;color:var(--gold);font-size:15px;font-weight:600">How Batchmate works — methodology &amp; honest math (click to expand)</summary>
+    <div class="meta" style="margin-top:10px;line-height:1.6;font-size:13.5px">
+      <p><b>What this is:</b> Batchmate downloads official Texas Lottery draw results for every
+      draw game and generates rolling ticket batches. The "Tightest tickets" table shows the
+      latest picks; "Best match" is the closest that exact ticket has ever come to a real draw
+      (e.g. <code>11/12</code> on All or Nothing is the $500 tier), "Best on" is the most recent
+      date that match occurred, and "Data thru" is the latest draw analyzed.</p>
+      <p><b>How tickets are built:</b> every game uses a sliding window of the most recent draws
+      (the <code>W=</code> label, usually 4–10). Numbers or digits that appeared rarely in that
+      window become the "rare pieces" tickets are built from, then every candidate is scored
+      against the full draw history on wins and drought length.</p>
+      <ul>
+        <li><b>All or Nothing</b> adds an explicit rule engine on top — absent-number anchors
+        when coverage gaps exist, frequency bands when they don't, odd/even signature matching,
+        and automatic window sizing per draw session (morning/day/evening/night each get their
+        own <code>W=</code>). Because a draw and its 12-number complement are equivalent, only
+        the 1,352,078 combinations containing the number 1 are tracked.</li>
+        <li><b>Pick 3 &amp; Daily 4</b> bucket digits 0–9 by frequency across the window, build
+        candidate digit multisets from the rarest digits, and score them by box-match wins
+        (any digit order counts) and drought across each session's full history.</li>
+        <li><b>Cash Five, Texas Two Step &amp; Lotto Texas</b> pick core numbers seen ≤2 times in
+        the window plus high-frequency fillers, generate the combinations, and score on their
+        real prize tiers (e.g. Lotto Texas match ≥4 on the post-2006 6/54 matrix).</li>
+        <li><b>Powerball &amp; Mega Millions</b> use the same rare-piece rolling over the current
+        number-matrix era only (PB 5/69 + bonus 1–26 since 2015; MM 5/70 since 2020), scored on
+        jackpot and lower-tier hits.</li>
+      </ul>
+      <p><b>The honest math:</b> Lottery draws are independent random events. Historical streaks,
+      droughts, and frequency patterns describe the past — they do not change the probability of
+      the next draw, and every ticket remains equally likely. Batchmate is a descriptive
+      analysis tool for organizing number choices, not a prediction system. Please play
+      responsibly.</p>
+    </div>
+  </details>
+  <details style="margin-top:20px">
+    <summary style="cursor:pointer;color:var(--dim);font-size:14px">Streak analysis — all combos by historical streaks (click to expand)</summary>
+    <div class="controls" style="margin-top:12px">
+      <select id="gameSel"></select>
+      <label class="meta">show <input id="topN" type="number" value="100" min="10" max="300" style="width:70px"> tickets</label>
+      <span class="meta">auto-refreshes</span>
+    </div>
+    <div class="statcards" id="cards"></div>
+    <table>
+      <thead><tr>
+        <th data-k="ticket">Ticket</th>
+        <th data-k="best_streak">Best streak</th>
+        <th data-k="total_wins">Total wins</th>
+        <th data-k="last_win">Last win</th>
+        <th data-k="drought">Drought (draws)</th>
+        <th data-k="current_streak">Current streak</th>
+        <th data-k="streak_start">Streak span</th>
+      </tr></thead>
+      <tbody id="tbody"></tbody>
+    </table>
+  </details>
+  <div class="adslot" id="ad-bottom"><ins class="adsbygoogle"
+     style="display:block"
+     data-ad-format="autorelaxed"
+     data-ad-client="ca-pub-7028777519947527"
+     data-ad-slot="8355645812"></ins>
+<script>
+     (adsbygoogle = window.adsbygoogle || []).push({});
+</script></div>
+  <div class="disclaimer">
+    Data refreshed automatically. Historical analysis describes past draws only — it does not predict future results.
+    Please play responsibly.
+  </div>
+</main>
+<script>
+let DATA = null, TIGHT = null, sortKey = 'best_streak', sortDir = -1;
+let tightKey = 'best', tightDir = -1;
+
+async function load() {
+  document.getElementById('status').textContent = 'loading data…';
+  if (window.BATCHMATE_DATA) {
+    DATA = window.BATCHMATE_DATA;
+  } else {
+    const r = await fetch('batchmate_data.json?ts=' + Date.now(), {cache:'no-store'});
+    DATA = await r.json();
+  }
+  try {
+    const tr = await fetch('tight_tickets.json?ts=' + Date.now(), {cache:'no-store'});
+    TIGHT = await tr.json();
+  } catch (e) { TIGHT = { tickets: [] }; }
+  document.getElementById('genmeta').textContent = 'generated ' + DATA.generated;
+  const notice = document.getElementById('refreshNotice');
+  if (notice) notice.textContent = 'Automatic refresh enabled · data generated ' + DATA.generated;
+  const sel = document.getElementById('gameSel');
+  sel.innerHTML = DATA.games.map((g,i)=>`<option value="${i}">${g.name} — ${g.pick} (${g.n_tickets.toLocaleString()} combos, ${g.n_draws.toLocaleString()} draws)</option>`).join('');
+  const games = [...new Set(TIGHT.tickets.map(t=>t.game))];
+  document.getElementById('tightSel').innerHTML =
+    '<option value="">all games ('+TIGHT.tickets.length+')</option>' +
+    games.map(g=>`<option value="${g}">${g} (${TIGHT.tickets.filter(t=>t.game===g).length})</option>`).join('');
+  document.getElementById('tightSel').onchange = renderTight;
+  const latestDraws = (TIGHT.latest_draws && TIGHT.latest_draws.length) ? TIGHT.latest_draws :
+    [...new Map(TIGHT.tickets.filter(t=>t.last_draw && t.game!=='All or Nothing').map(t=>[
+      (t.game||'')+'|'+(t.sess||''), {game:t.game, session:(t.sess||'').replace(/^./,x=>x.toUpperCase()), date:t.asof||'', numbers:t.last_draw}
+    ])).values()];
+  const expectedAonSessions = ['Morning','Day','Evening','Night'];
+  const hasAonSessions = latestDraws.some(d=>d.game==='All or Nothing' && d.session);
+  if (!hasAonSessions) {
+    expectedAonSessions.forEach(session=>latestDraws.push({game:'All or Nothing',session,date:'',numbers:'Awaiting session-specific refresh'}));
+  }
+  const byGame = {};
+  latestDraws.forEach(d=>{
+    (byGame[d.game] = byGame[d.game] || []).push(d);
+  });
+  document.getElementById('latestDraws').innerHTML =
+    '<b style="color:var(--gold)">Latest drawings today:</b> ' +
+    Object.entries(byGame).map(([g, draws])=>{
+      const parts = draws.map(d=>{
+        const session = d.session ? ' · ' + d.session : '';
+        return `<span class="ticket" style="font-size:13px">${session}: ${d.numbers} ${d.date ? '('+d.date+')' : ''}</span>`;
+      });
+      return `<span style="white-space:normal">${g}: ${parts.join(' &nbsp;|&nbsp; ')}</span>`;
+    }).join(' &nbsp;|&nbsp; ') || 'No latest draw data available';
+  render();
+  renderTight();
+  renderHot();
+  renderReadj();
+}
+
+function hitGameSession(t) {
+   const hits = t.hit_sessions || [];
+   if (hits.length) return hits.map(h => `${h.label} (${h.match})`).join(' · ');
+   const m = (t.last || '').match(/(\d+)\/(\d+)/);
+   if (!m || +m[1] === 0) return 'No hit on latest drawings';
+   const session = (t.sess || '').trim();
+   const label = t.game + (session ? ' · ' + session.charAt(0).toUpperCase() + session.slice(1) : '');
+   return `${label} (${t.last})`;
+ }
+
+function tightVal(t, k) {
+  if (k === 'best' || k === 'last') {
+    const m = (t[k]||'').match(/(\d+)\/(\d+)/);
+    return m ? (+m[1])/(+m[2]) : -1;
+  }
+  if (k === 'best_date' || k === 'asof') {
+    const m = (t[k]||'').match(/(\d+)\/(\d+)\/(\d+)/);
+    return m ? (+m[3])*10000 + (+m[1])*100 + (+m[2]) : 0;
+  }
+  return t[k] || '';
+}
+
+function renderTight() {
+  const f = document.getElementById('tightSel').value;
+  const rows = TIGHT.tickets.filter(t=>!f || t.game===f);
+  rows.sort((a,b)=>{
+    const va = tightVal(a,tightKey), vb = tightVal(b,tightKey);
+    if (typeof va === 'number') return tightDir*(va-vb);
+    return tightDir*((va+'')<(vb+'')?-1:(va+'')>(vb+'')?1:0);
+  });
+  document.getElementById('tightbody').innerHTML = rows.map(t=>`
+    <tr>
+      <td class="ticket">${t.ticket}</td>
+      <td class="${(()=>{const m=(t.best||'').match(/(\d+)\/(\d+)/);return m&&( +m[1]===+m[2] || (+m[2]===12&&+m[1]>=11))?'streak':''})()}">${t.best||'—'}</td>
+      <td class="meta">${t.best_date||'—'}</td>
+      <td class="${(()=>{const m=(t.last||'').match(/(\d+)\/(\d+)/);return m&&( +m[1]===+m[2] || (+m[2]===12&&+m[1]>=11))?'streak':''})()}">${t.last||'—'}</td>
+      <td class="meta">${t.asof||'—'}</td>
+      <td>${t.game}</td>
+      <td class="meta">${hitGameSession(t)}</td>
+    </tr>`).join('');
+}
+
+function renderHot() {
+  const byGame = {};
+  TIGHT.tickets.forEach(t=>{
+    const m = (t.last||'').match(/(\d+)\/(\d+)/);
+    const score = m ? (+m[1])/(+m[2]) : -1;
+    (byGame[t.game] = byGame[t.game] || []).push({t, score});
+  });
+  const rows = [];
+  Object.entries(byGame).forEach(([g, arr])=>{
+    arr.sort((a,b)=>b.score-a.score);
+    arr.slice(0,3).forEach(({t,score})=>rows.push({g, t, score}));
+  });
+  rows.sort((a,b)=>b.score-a.score || a.g.localeCompare(b.g));
+  document.getElementById('hotbody').innerHTML = rows.map(({g,t})=>`
+    <tr>
+      <td>${g}</td>
+      <td class="ticket">${t.ticket}</td>
+      <td class="${(()=>{const m=(t.last||'').match(/(\d+)\/(\d+)/);return m&&( +m[1]===+m[2] || (+m[2]===12&&+m[1]>=11))?'streak':''})()}">${t.last||'—'}</td>
+      <td class="meta">${t.last_draw||'—'}</td>
+      <td class="meta">${hitGameSession(t)}</td>
+    </tr>`).join('');
+}
+
+function renderReadj() {
+  const byGame = {};
+  TIGHT.tickets.forEach(t=>{
+    if(!t.remake || t.last_win !== false) return;
+    const m = (t.last||'').match(/(\d+)\/(\d+)/);
+    const score = m ? (+m[1])/(+m[2]) : 0;
+    (byGame[t.game] = byGame[t.game] || []).push({t, score});
+  });
+  const rows = [];
+  Object.entries(byGame).forEach(([g, arr])=>{
+    arr.sort((a,b)=>a.score-b.score);
+    arr.slice(0,3).forEach(({t,score})=>rows.push({g, t, score}));
+  });
+  rows.sort((a,b)=>a.score-b.score || a.g.localeCompare(b.g));
+  document.getElementById('readjbody').innerHTML = rows.map(({g,t})=>`
+    <tr>
+      <td>${g}</td>
+      <td class="ticket">${t.ticket}</td>
+      <td>${t.last||'—'}</td>
+      <td class="ticket" style="color:var(--accent)">${t.remake}</td>
+      <td class="meta">${t.remake_match||'—'}</td>
+      <td class="meta">${t.last_draw||'—'}</td>
+      <td class="meta">${hitGameSession(t)}</td>
+    </tr>`).join('') || '<tr><td colspan="7" class="meta">no failing combos</td></tr>';
+}
+
+function game() { return DATA.games[+document.getElementById('gameSel').value]; }
+
+function render() {
+  const g = game();
+  const cards = document.getElementById('cards');
+  const maxStreak = Math.max(...g.top.map(t=>t.best_streak));
+  const maxDrought = Math.max(...g.top.map(t=>t.drought));
+  const everWon = g.top.filter(t=>t.total_wins>0).length;
+  cards.innerHTML = `
+    <div class="card"><b>${g.n_tickets.toLocaleString()}</b><span>possible tickets</span></div>
+    <div class="card"><b>${g.n_draws.toLocaleString()}</b><span>draws analyzed</span></div>
+    <div class="card"><b>${g.win_rule}</b><span>win definition</span></div>
+    <div class="card"><b>${maxStreak}</b><span>longest streak (top ${g.top.length})</span></div>
+    <div class="card"><b>${maxDrought.toLocaleString()}</b><span>longest drought (draws)</span></div>
+    <div class="card"><b>${everWon}/${g.top.length}</b><span>top tickets that ever won</span></div>`;
+  let rows = g.top.slice();
+  rows.sort((a,b)=>{
+    let va=a[sortKey], vb=b[sortKey];
+    if (va==null) va = sortDir>0 ? Infinity : -Infinity;
+    if (vb==null) vb = sortDir>0 ? Infinity : -Infinity;
+    if (typeof va==='string') return sortDir*(va<vb?-1:va>vb?1:0);
+    return sortDir*(va-vb);
+  });
+  rows = rows.slice(0, +document.getElementById('topN').value);
+  document.getElementById('tbody').innerHTML = rows.map(t=>`
+    <tr>
+      <td class="ticket">${t.ticket}</td>
+      <td class="${t.best_streak>=3?'streak':''}">${t.best_streak}</td>
+      <td>${t.total_wins}</td>
+      <td>${t.last_win||'—'}</td>
+      <td class="${t.drought>g.n_draws*0.8?'warn':''}">${t.drought.toLocaleString()}</td>
+      <td>${t.current_streak}</td>
+      <td class="meta">${t.streak_start&&t.streak_end ? t.streak_start+' → '+t.streak_end : '—'}</td>
+    </tr>`).join('');
+}
+
+document.querySelectorAll('th[data-k]').forEach(th=>{
+  th.onclick = ()=>{ const k=th.dataset.k; sortDir = (sortKey===k)? -sortDir : -1; sortKey=k; render(); };
+});
+document.querySelectorAll('th[data-tk]').forEach(th=>{
+  th.onclick = ()=>{ const k=th.dataset.tk; tightDir = (tightKey===k)? -tightDir : -1; tightKey=k; renderTight(); };
+});
+document.getElementById('gameSel').onchange = render;
+document.getElementById('topN').onchange = render;
+// auto-rebuild: reload when tab becomes visible again, and every 15 min
+setInterval(()=>{ if(!document.hidden) location.reload(); }, 15*60*1000);
+document.addEventListener('visibilitychange', ()=>{ if(!document.hidden) location.reload(); });
+load().catch(e=>{document.getElementById('status').textContent='failed to load batchmate_data.json — run batchmate_build.py first';console.error(e)});
+</script>
+</body>
+</html>
