@@ -108,8 +108,12 @@ export function createInitialPick3Board(session: Pick3Session): Pick3BoardState 
 }
 
 export function validatePick3Draw(draw: Pick3Draw): void {
-  if (!/^\\d{4}-\\d{2}-\\d{2}$/.test(draw.date)) {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(draw.date)) {
     throw new Error(`Invalid Pick 3 draw date: ${draw.date}`);
+  }
+  const parsedDate = new Date(`${draw.date}T00:00:00.000Z`);
+  if (Number.isNaN(parsedDate.getTime()) || parsedDate.toISOString().slice(0, 10) !== draw.date) {
+    throw new Error(`Invalid Pick 3 calendar date: ${draw.date}`);
   }
   if (draw.digits.length !== PICK3_COLUMNS ||
       draw.digits.some((digit) => !Number.isInteger(digit) || digit < 0 || digit > 9)) {
