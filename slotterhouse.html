@@ -104,13 +104,13 @@ footer{border-top:1px solid var(--line);padding:20px clamp(18px,4vw,48px);color:
 </section>
 <section id="imports" class="panelview">
  <div class="card"><h2>Official Drawing History</h2><p class="muted">Review past drawings by game and drawing time. New history is checked for the correct date and number format before it is added, helping keep the record accurate and consistent.</p>
- <p><button class="action" id="loadCsvBtn" type="button">View Drawing History</button> <span class="muted" id="csvStatus" role="status">Not loaded yet</span></p>
+ <p><button class="action" id="loadCsvBtn" type="button">View Drawing History</button> <span class="muted" id="csvStatus" role="status">History not loaded</span></p>
  <div id="csvResults" class="tablewrap muted">Choose a game and drawing time to browse its history in date order.</div>
  <div class="section" style="display:flex;gap:10px;flex-wrap:wrap;align-items:center">
   <label for="streamSelect" class="muted">Historical stream</label>
   <select id="streamSelect" class="subtle"><option value="">Connect first</option></select>
-  <button class="subtle" id="loadHistoryBtn" type="button" disabled>Load first page</button>
-  <button class="subtle" id="loadMoreHistoryBtn" type="button" disabled>Load next page</button>
+  <button class="subtle" id="loadHistoryBtn" type="button" disabled>Show drawings</button>
+  <button class="subtle" id="loadMoreHistoryBtn" type="button" disabled>Show older drawings</button>
  </div>
  <div id="historyResults" class="tablewrap muted">No stream selected.</div>
  </div>
@@ -140,7 +140,7 @@ async function loadStreamPage(reset){
  const params=new URLSearchParams({game:stream.game,session:stream.session,limit:'500'});if(!reset&&historyCursor)params.set('after',historyCursor);
  status.textContent='Loading drawing history…';const response=await fetch(DATA_API+'/api/session-draws?'+params.toString(),{cache:'no-store'});const payload=await response.json();
  if(!response.ok||!payload.ok)throw new Error(payload.error||'History API request failed');if(reset)historyRows=[];historyRows=historyRows.concat(payload.draws||[]);historyCursor=payload.nextAfter||null;
- out.innerHTML='<table><thead><tr><th>Date</th><th>Original draw values</th><th>Drawing source</th></tr></thead><tbody>'+historyRows.map(d=>{let v=d.numbers;try{v=JSON.parse(d.numbers).join(', ')}catch(_){}return '<tr><td>'+d.draw_date+'</td><td style="font-family:monospace">'+v+'</td><td>'+d.source_file+'</td></tr>'}).join('')+'</tbody></table>';
+ out.innerHTML='<table><thead><tr><th>Date</th><th>Drawn numbers</th></tr></thead><tbody>'+historyRows.map(d=>{let v=d.numbers;try{v=JSON.parse(d.numbers).join(', ')}catch(_){}return '<tr><td>'+d.draw_date+'</td><td style="font-family:monospace">'+v+'</td></tr>'}).join('')+'</tbody></table>';
  document.getElementById('loadMoreHistoryBtn').disabled=!historyCursor;status.textContent=stream.game+' · '+stream.session+' · loaded '+historyRows.length+' records'+(historyCursor?' · more available':' · end of history');
 }
 async function loadBatchmateCsvs(){
