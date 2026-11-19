@@ -41,7 +41,11 @@
   .tightwrap { overflow-x:auto; }
   .adslot { margin:14px 0; padding:10px; background:#141b2b; border:1px dashed #34405e; border-radius:10px; text-align:center; color:var(--dim); font-size:12px; min-height:90px; display:flex; align-items:center; justify-content:center; }
   .adslot ins, .adslot iframe { display:block; margin:0 auto; }
-  nav.site-nav { display:flex; gap:8px; flex-wrap:wrap; width:100%; margin-top:6px; }\n  nav.site-nav a { border:1px solid #34405e; background:var(--panel); color:var(--dim); padding:9px 13px; border-radius:9px; font:inherit; text-decoration:none; display:inline-block; text-align:center; }\n  nav.site-nav a.active { background:#203653; border-color:#37699b; color:#fff; }\n  @media(max-width:600px){ nav.site-nav { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); } nav.site-nav a { width:100%; } }\n
+  nav.site-nav { display:flex; gap:8px; flex-wrap:wrap; width:100%; margin-top:6px; }
+  nav.site-nav a { border:1px solid #34405e; background:var(--panel); color:var(--dim); padding:9px 13px; border-radius:9px; font:inherit; text-decoration:none; display:inline-block; text-align:center; }
+  nav.site-nav a.active { background:#203653; border-color:#37699b; color:#fff; }
+  @media(max-width:600px){ nav.site-nav { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); } nav.site-nav a { width:100%; } }
+
 
 /* Coordinated playful finish */
 body{background:radial-gradient(ellipse at 8% 0%,rgba(77,163,255,.14),transparent 34%),radial-gradient(ellipse at 94% 8%,rgba(255,200,87,.11),transparent 30%),#0d1422}
@@ -93,7 +97,16 @@ header h1{font-size:clamp(28px,3.2vw,34px)}
   
   <div class="meta" id="genmeta"></div>
   <span class="refreshnotice" id="refreshNotice" role="status" aria-live="polite">Checking for the latest drawing updates…</span>
-  <nav class="site-nav" aria-label="Main navigation">\n    <a class="active" href="index.html" aria-current="page">Batchmate</a>\n    <a href="slotterhouse.html">Slotterhouse</a>\n    <a href="slotterhouse.html#walkthrough">Chronological Walkthrough</a>\n    <a href="slotterhouse.html#journal">Drawing Journal</a>\n    <a href="slotterhouse.html#shapes">Number Patterns</a>\n    <a href="slotterhouse.html#transitions">Number Changes</a>\n    <a href="slotterhouse.html#assumptions">Next-Draw Ideas</a>\n    <a href="slotterhouse.html#imports">Past Drawings</a>\n  </nav>
+  <nav class="site-nav" aria-label="Main navigation">
+    <a class="active" href="index.html" aria-current="page">Batchmate</a>
+    <a href="slotterhouse.html">Slotterhouse</a>
+    <a href="slotterhouse.html#walkthrough">Chronological Walkthrough</a>
+    <a href="slotterhouse.html#journal">Drawing Journal</a>
+    <a href="slotterhouse.html#shapes">Number Patterns</a>
+    <a href="slotterhouse.html#transitions">Number Changes</a>
+    <a href="slotterhouse.html#assumptions">Next-Draw Ideas</a>
+    <a href="slotterhouse.html#imports">Past Drawings</a>
+  </nav>
 </header>
 <main>
   <div class="meta" id="latestDraws" style="margin-bottom:10px"></div>
