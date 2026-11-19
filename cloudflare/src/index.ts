@@ -291,7 +291,7 @@ export default {
       const session = url.searchParams.get("session");
       const limit = Math.min(500, Math.max(1, Number(url.searchParams.get("limit") || 100)));
       const before = url.searchParams.get("before");
-      let query = "SELECT source_filename,game,session,draw_date,numbers_json FROM draws WHERE 1=1";
+      let query = "SELECT source_filename,game,session,draw_date,numbers_json,source_sha256,imported_at FROM draws WHERE 1=1";
       const values: (string | number)[] = [];
       if (game) { query += " AND game=?"; values.push(game); }
       if (session) { query += " AND session=?"; values.push(session); }
