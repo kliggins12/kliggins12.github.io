@@ -26,7 +26,7 @@ footer{border-top:1px solid var(--line);padding:20px clamp(18px,4vw,48px);color:
 <header>
  <div class="top"><div class="brand">Slotter<span>house</span></div><a href="./" style="color:#62a9ff;text-decoration:none;font-weight:700">← Back to Batchmate</a><span class="tag">BATCHMATE ANALYSIS</span></div>
  <nav aria-label="Slotterhouse sections">
-  <button class="active" data-view="overview">Overview</button><button data-view="walkthrough">Walkthrough</button><button data-view="journal">Piece Journal</button><button data-view="shapes">Shape Tracking</button><button data-view="transitions">Transitions</button><button data-view="assumptions">Assumptions</button><button data-view="imports">Data Imports</button>
+  <button class="active" data-view="overview">Overview</button><button data-view="walkthrough">Walkthrough</button><button data-view="journal">Piece Journal</button><button data-view="shapes">Shape Tracking</button><button data-view="transitions">Transitions</button><button data-view="assumptions">Assumptions</button><button data-view="imports">Drawing History</button>
  </nav>
 </header>
 <main>
@@ -40,15 +40,15 @@ footer{border-top:1px solid var(--line);padding:20px clamp(18px,4vw,48px);color:
      (adsbygoogle = window.adsbygoogle || []).push({});
 </script></div>
 <section id="overview" class="panelview active">
- <div class="notice">Initial web application shell. The analysis engine and validated 17-file import contract are not connected yet. No lottery results or transition probabilities are fabricated.</div>
+ <div class="notice">Slotterhouse is being prepared for historical board analysis. Drawing history and analysis features will become available as each part is completed. No results or probabilities are estimated without supporting history.</div>
  <div class="grid section">
-  <article class="card"><h3>Drawing records</h3><div class="metric" id="recordCount">0</div><div class="muted">Validated records imported</div></article>
+  <article class="card"><h3>Drawing records</h3><div class="metric" id="recordCount">0</div><div class="muted">Draws available</div></article>
   <article class="card"><h3>Piece Journal entries</h3><div class="metric" id="journalCount">0</div><div class="muted">Chronological observations</div></article>
   <article class="card"><h3>Shape transitions</h3><div class="metric" id="transitionCount">0</div><div class="muted">Evidence-backed transitions</div></article>
   <article class="card"><h3>Assumptions</h3><div class="metric" id="assumptionCount">0</div><div class="muted">Generated candidates, kept separate from results</div></article>
  </div>
  <div class="grid section">
-  <article class="card"><h2>Piece Journal</h2><p class="muted">Record each draw observation in order, retaining its source file, game, session, date, and original number positions.</p><button class="subtle" data-go="journal">Open journal</button></article>
+  <article class="card"><h2>Piece Journal</h2><p class="muted">Record each draw observation in order, keeping the game, drawing time, date, and original number positions together.</p><button class="subtle" data-go="journal">Open journal</button></article>
   <article class="card"><h2>Shape Tracking</h2><p class="muted">Compare exact positions between consecutive valid observations without silently crossing game or session boundaries.</p><button class="subtle" data-go="shapes">Inspect shapes</button></article>
   <article class="card"><h2>Markov Transitions</h2><p class="muted">Show observed transitions with counts. Sparse or missing evidence stays explicitly unknown.</p><button class="subtle" data-go="transitions">View transitions</button></article>
  </div>
@@ -91,7 +91,7 @@ footer{border-top:1px solid var(--line);padding:20px clamp(18px,4vw,48px);color:
  </div>
 </section>
 <section id="journal" class="panelview">
- <div class="card"><h2>Piece Journal</h2><p class="muted">The journal will preserve source provenance, original ordering, date, game, session, parser version, and game-rule version. Historical observations are immutable; repeat imports must be idempotent.</p><div class="notice">Waiting for the versioned CSV import and record schema.</div></div>
+ <div class="card"><h2>Piece Journal</h2><p class="muted">The journal will keep each drawing in its original order, with its date, game, drawing time, and number positions. Past entries will remain unchanged when new history is added.</p><div class="notice">Drawing history is being prepared for the journal.</div></div>
 </section>
 <section id="shapes" class="panelview">
  <div class="card"><h2>Exact-position shape tracking</h2><p class="muted">Shape comparisons will use the source draw's exact positions and compare only consecutive valid observations within the same configured stream.</p><div class="notice">No shape data loaded. This view will not infer missing positions.</div></div>
@@ -103,9 +103,9 @@ footer{border-top:1px solid var(--line);padding:20px clamp(18px,4vw,48px);color:
  <div class="card"><h2>Constrained assumptions</h2><p class="muted">Candidate combinations will be generated under each game's number count, number range, and bonus-ball rules. Assumptions remain separate from actual drawings and are never presented as predictions or improved odds.</p><div class="notice">Candidate generation is not enabled until game configurations and validation tests are complete.</div></div>
 </section>
 <section id="imports" class="panelview">
- <div class="card"><h2>Official drawing data</h2><p class="muted">Import contract target: the 17 Batchmate source CSV files. The importer must validate each file's expected game/session, date format, number count, ranges, and duplicates before accepting records.</p>
- <p><button class="action" id="loadCsvBtn" type="button">Connect stored draw history</button> <span class="muted" id="csvStatus" role="status">Not loaded yet</span></p>
- <div id="csvResults" class="tablewrap muted">Connect to load the 12 chronological session streams stored in Turso.</div>
+ <div class="card"><h2>Official Drawing History</h2><p class="muted">Review past drawings by game and drawing time. New history is checked for the correct date and number format before it is added, helping keep the record accurate and consistent.</p>
+ <p><button class="action" id="loadCsvBtn" type="button">View Drawing History</button> <span class="muted" id="csvStatus" role="status">Not loaded yet</span></p>
+ <div id="csvResults" class="tablewrap muted">Choose a game and drawing time to browse its history in date order.</div>
  <div class="section" style="display:flex;gap:10px;flex-wrap:wrap;align-items:center">
   <label for="streamSelect" class="muted">Historical stream</label>
   <select id="streamSelect" class="subtle"><option value="">Connect first</option></select>
@@ -126,7 +126,7 @@ footer{border-top:1px solid var(--line);padding:20px clamp(18px,4vw,48px);color:
 </main>
 <footer>Slotterhouse is an analytical companion to Batchmate. Past drawings do not alter the odds of future random drawings.</footer>
 <script>
-const labels={overview:'Slotterhouse overview',journal:'Piece Journal',shapes:'Shape Tracking',transitions:'Transition analysis',assumptions:'Constrained assumptions',imports:'Data Imports'};
+const labels={overview:'Slotterhouse overview',journal:'Piece Journal',shapes:'Shape Tracking',transitions:'Transition analysis',assumptions:'Constrained assumptions',imports:'Drawing History'};
 function show(view){document.querySelectorAll('.panelview').forEach(x=>x.classList.toggle('active',x.id===view));document.querySelectorAll('nav button').forEach(x=>x.classList.toggle('active',x.dataset.view===view));document.getElementById('pageTitle').textContent=labels[view]||labels.overview;location.hash=view;}
 document.querySelectorAll('nav button').forEach(b=>b.addEventListener('click',()=>show(b.dataset.view)));
 document.querySelectorAll('[data-go]').forEach(b=>b.addEventListener('click',()=>show(b.dataset.go)));
@@ -138,14 +138,14 @@ function selectedStream(){const p=document.getElementById('streamSelect').value.
 async function loadStreamPage(reset){
  const stream=selectedStream();if(!stream)return;const status=document.getElementById('csvStatus'),out=document.getElementById('historyResults');
  const params=new URLSearchParams({game:stream.game,session:stream.session,limit:'500'});if(!reset&&historyCursor)params.set('after',historyCursor);
- status.textContent='Reading chronological history from Turso…';const response=await fetch(DATA_API+'/api/session-draws?'+params.toString(),{cache:'no-store'});const payload=await response.json();
+ status.textContent='Loading drawing history…';const response=await fetch(DATA_API+'/api/session-draws?'+params.toString(),{cache:'no-store'});const payload=await response.json();
  if(!response.ok||!payload.ok)throw new Error(payload.error||'History API request failed');if(reset)historyRows=[];historyRows=historyRows.concat(payload.draws||[]);historyCursor=payload.nextAfter||null;
- out.innerHTML='<table><thead><tr><th>Date</th><th>Original draw values</th><th>Source CSV</th></tr></thead><tbody>'+historyRows.map(d=>{let v=d.numbers;try{v=JSON.parse(d.numbers).join(', ')}catch(_){}return '<tr><td>'+d.draw_date+'</td><td style="font-family:monospace">'+v+'</td><td>'+d.source_file+'</td></tr>'}).join('')+'</tbody></table>';
+ out.innerHTML='<table><thead><tr><th>Date</th><th>Original draw values</th><th>Drawing source</th></tr></thead><tbody>'+historyRows.map(d=>{let v=d.numbers;try{v=JSON.parse(d.numbers).join(', ')}catch(_){}return '<tr><td>'+d.draw_date+'</td><td style="font-family:monospace">'+v+'</td><td>'+d.source_file+'</td></tr>'}).join('')+'</tbody></table>';
  document.getElementById('loadMoreHistoryBtn').disabled=!historyCursor;status.textContent=stream.game+' · '+stream.session+' · loaded '+historyRows.length+' records'+(historyCursor?' · more available':' · end of history');
 }
 async function loadBatchmateCsvs(){
- const btn=document.getElementById('loadCsvBtn'),status=document.getElementById('csvStatus'),out=document.getElementById('csvResults');btn.disabled=true;status.textContent='Connecting to Cloudflare and Turso…';
- try{const response=await fetch(DATA_API+'/api/session-draws/summary',{cache:'no-store'});const payload=await response.json();if(!response.ok||!payload.ok)throw new Error(payload.error||'Turso history summary unavailable');
+ const btn=document.getElementById('loadCsvBtn'),status=document.getElementById('csvStatus'),out=document.getElementById('csvResults');btn.disabled=true;status.textContent='Connecting to drawing history…';
+ try{const response=await fetch(DATA_API+'/api/session-draws/summary',{cache:'no-store'});const payload=await response.json();if(!response.ok||!payload.ok)throw new Error(payload.error||'Drawing history is temporarily unavailable');
   streamSummary=payload.streams||[];status.textContent='Connected · '+Number(payload.drawCount).toLocaleString()+' historical records';document.getElementById('recordCount').textContent=Number(payload.drawCount).toLocaleString();
   document.getElementById('journalCount').textContent='0';document.getElementById('transitionCount').textContent='0';document.getElementById('assumptionCount').textContent='0';
   const select=document.getElementById('streamSelect');select.innerHTML=streamSummary.map(s=>'<option value="'+s.game+'|'+s.session+'">'+s.game+' · '+s.session+' ('+Number(s.draw_count).toLocaleString()+')</option>').join('');
