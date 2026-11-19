@@ -1,0 +1,30 @@
+name: Apply Batchmate D1 Migrations
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  migrate:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Install Wrangler dependencies
+        working-directory: cloudflare
+        run: npm install
+
+      - name: Apply remote D1 migrations
+        uses: cloudflare/wrangler-action@v3
+        with:
+          apiToken: ${{ secrets.CLOUDFLARE_D1_TOKEN }}
+          workingDirectory: cloudflare
+          command: d1 migrations apply batchmate --remote
