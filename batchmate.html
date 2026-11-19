@@ -305,7 +305,7 @@ function renderHot() {
   });
   Object.entries(byGame).forEach(([game, tickets])=>{
     tickets.sort((a,b)=>{
-      const score = t => { const m=String(t.last||'').match(/(\\d+)\\/(\\d+)/); return m ? Number(m[1])/Number(m[2]) : -1; };
+      const score = t => { const m=String(t.last||'').match(/(\d+)\/(\d+)/); return m ? Number(m[1])/Number(m[2]) : -1; };
       return score(b)-score(a);
     });
     tickets.slice(0,3).forEach(t=>rows.push(t));
