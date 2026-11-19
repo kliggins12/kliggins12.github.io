@@ -99,13 +99,13 @@ header h1{font-size:clamp(28px,3.2vw,34px)}
   <span class="refreshnotice" id="refreshNotice" role="status" aria-live="polite">Checking for the latest drawing updates…</span>
   <nav class="site-nav" aria-label="Main navigation">
     <a class="active" href="index.html" aria-current="page">Batchmate</a>
-    <a href="slotterhouse.html">Slotterhouse</a>
-    <a href="slotterhouse.html#walkthrough">Chronological Walkthrough</a>
-    <a href="slotterhouse.html#journal">Drawing Journal</a>
-    <a href="slotterhouse.html#shapes">Number Patterns</a>
-    <a href="slotterhouse.html#transitions">Number Changes</a>
-    <a href="slotterhouse.html#assumptions">Next-Draw Ideas</a>
-    <a href="slotterhouse.html#imports">Past Drawings</a>
+    <a href="numberlab.html">NumberLab</a>
+    <a href="numberlab.html#walkthrough">Chronological Walkthrough</a>
+    <a href="numberlab.html#journal">Drawing Journal</a>
+    <a href="numberlab.html#shapes">Number Patterns</a>
+    <a href="numberlab.html#transitions">Number Changes</a>
+    <a href="numberlab.html#assumptions">Next-Draw Ideas</a>
+    <a href="numberlab.html#imports">Past Drawings</a>
   </nav>
 </header>
 <main>
@@ -243,7 +243,8 @@ async function loadLatestDrawsFromCloudflare() {
     latestOfficialDraws = payload.draws.map(d=>({...d, numbers:d.numbers_json}));
     renderHot();
     const notice = document.getElementById('refreshNotice');
-    if (notice) notice.textContent = 'Drawing history updated · ' + payload.count + ' sources';
+    if (notice) const updatedAt = new Date().toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'short' });
+    if (notice) notice.textContent = 'Drawing history updated · ' + updatedAt;
   } catch (error) {
     console.error('Batchmate latest draw API failed:', error);
   }
