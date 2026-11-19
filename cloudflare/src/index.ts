@@ -78,12 +78,12 @@ async function ingest(env: Env): Promise<{ updated: number; unchanged: number; e
       }
       if (!text.includes("\n") || !text.includes(",")) throw new Error("Response does not look like CSV");
       const bytes = new TextEncoder().encode(text);
-      const hash = await sha256Hex(bytes.buffer);
+      const hash = await sha256Hex(bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength) as ArrayBuffer);
       const prior = await env.DB.prepare("SELECT sha256 FROM source_files WHERE filename=?")
         .bind(source.filename).first<{ sha256: string }>();
       if (prior?.sha256 === hash) { unchanged++; continue; }
 
-      const key = `sources/${source.filename}`;
+      const key = `sources/${source.filename}/${hash}.csv`;
       await env.ARCHIVE.put(key, bytes, {
         httpMetadata: { contentType: "text/csv; charset=utf-8" },
         customMetadata: { game: source.game, session: source.session, sha256: hash }
@@ -129,7 +129,9 @@ export default {
     if (url.pathname.startsWith("/api/sources/")) {
       const filename = decodeURIComponent(url.pathname.slice("/api/sources/".length));
       if (!TX.some((s) => s.filename === filename)) return json({ error: "Unknown source file" }, 404);
-      const object = await env.ARCHIVE.get(`sources/${filename}`);
+      const record = await env.DB.prepare("SELECT r2_key FROM source_files WHERE filename=?").bind(filename).first<{ r2_key: string }>();
+      if (!record) return json({ error: "Source has not been collected yet" }, 404);
+      const object = await env.ARCHIVE.get(record.r2_key);
       if (!object) return json({ error: "Source has not been collected yet" }, 404);
       return new Response(object.body, {
         headers: { "content-type": "text/csv; charset=utf-8", "cache-control": "public, max-age=300", etag: object.httpEtag }
