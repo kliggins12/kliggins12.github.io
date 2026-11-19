@@ -128,7 +128,7 @@ test("replay freezes each assumption before seeing target digits and links rolli
           ...m,
           position: { row: draw.digits[0], column: m.position.column }
         }));
-        return { resultingMarkings: existing, changes: [];
+        return { resultingMarkings: existing, changes: [] };
       }
     }
   });
