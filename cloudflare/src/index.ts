@@ -1,4 +1,4 @@
-import { checkTurso } from "./turso";
+import { checkTurso, getTursoClient } from "./turso";
 
 interface Env {
   DB: D1Database;
@@ -232,6 +232,83 @@ export default {
           connected: false,
           error: error instanceof Error ? error.message : "Connection failed"
         }, 503);
+      }
+    }
+
+    if (url.pathname === "/api/session-draws/summary") {
+      try {
+        const db = getTursoClient(env);
+        const result = await db.execute(`
+          SELECT game, session, COUNT(*) AS draw_count,
+                 MIN(draw_date) AS first_draw_date,
+                 MAX(draw_date) AS last_draw_date
+          FROM session_draws
+          GROUP BY game, session
+          ORDER BY game, CASE session
+            WHEN 'morning' THEN 1 WHEN 'day' THEN 2
+            WHEN 'evening' THEN 3 WHEN 'night' THEN 4 ELSE 5 END
+        `);
+        const streams = result.rows.map((row) => ({
+          game: String(row.game),
+          session: String(row.session),
+          draw_count: Number(row.draw_count),
+          first_draw_date: String(row.first_draw_date),
+          last_draw_date: String(row.last_draw_date)
+        }));
+        return json({
+          ok: true,
+          storage: "turso",
+          streamCount: streams.length,
+          drawCount: streams.reduce((sum, stream) => sum + stream.draw_count, 0),
+          streams
+        });
+      } catch (error) {
+        return json({ ok: false, storage: "turso", error: error instanceof Error ? error.message : "History query failed" }, 503);
+      }
+    }
+
+    if (url.pathname === "/api/session-draws") {
+      const game = url.searchParams.get("game") || "";
+      const session = url.searchParams.get("session") || "";
+      const after = url.searchParams.get("after");
+      const allowedGames = ["All or Nothing", "Pick 3", "Daily 4"];
+      const allowedSessions = ["morning", "day", "evening", "night"];
+      if (!allowedGames.includes(game) || !allowedSessions.includes(session)) {
+        return json({ error: "Supply a supported game and session." }, 400);
+      }
+      if (after && !/^\\d{4}-\\d{2}-\\d{2}$/.test(after)) {
+        return json({ error: "after must be YYYY-MM-DD." }, 400);
+      }
+      const limit = Math.min(1000, Math.max(1, Number(url.searchParams.get("limit") || 500)));
+      try {
+        const db = getTursoClient(env);
+        const result = await db.execute({
+          sql: `SELECT game, session, draw_date, numbers, source_file, source_hash, imported_at
+                FROM session_draws
+                WHERE game=? AND session=? ${after ? "AND draw_date>?" : ""}
+                ORDER BY draw_date ASC LIMIT ?`,
+          args: after ? [game, session, after, limit] : [game, session, limit]
+        });
+        const draws = result.rows.map((row) => ({
+          game: String(row.game),
+          session: String(row.session),
+          draw_date: String(row.draw_date),
+          numbers: String(row.numbers),
+          source_file: String(row.source_file),
+          source_hash: String(row.source_hash),
+          imported_at: String(row.imported_at)
+        }));
+        return json({
+          ok: true,
+          storage: "turso",
+          game,
+          session,
+          count: draws.length,
+          draws,
+          nextAfter: draws.length === limit ? draws[draws.length - 1].draw_date : null
+        });
+      } catch (error) {
+        return json({ ok: false, storage: "turso", error: error instanceof Error ? error.message : "History query failed" }, 503);
       }
     }
 
