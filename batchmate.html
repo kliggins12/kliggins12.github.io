@@ -64,6 +64,21 @@ button,select,input{transition:border-color .16s ease,box-shadow .16s ease}
 button:focus-visible,a:focus-visible,select:focus-visible{outline:2px solid #79baff;outline-offset:3px}
 @media(prefers-reduced-motion:reduce){*,*:before,*:after{transition:none!important;scroll-behavior:auto!important}}
 
+
+/* Centered, balanced page alignment */
+header{justify-content:center;text-align:center;padding-left:clamp(14px,4vw,42px);padding-right:clamp(14px,4vw,42px)}
+header>*{text-align:center}
+nav.site-nav{justify-content:center}
+main{width:min(100% - 28px,1120px);padding:24px clamp(12px,3vw,28px);text-align:center}
+main>h1,main>h2,main>h3,main>p,.disclaimer{text-align:center}
+.controls{justify-content:center}
+.statcards{justify-content:center}
+.card{text-align:center}
+.tightwrap,.tablewrap{margin-left:auto;margin-right:auto}
+table{margin-left:auto;margin-right:auto}
+th,td{text-align:center}
+.loading{text-align:center}
+
 </style>
 </head>
 <body>
