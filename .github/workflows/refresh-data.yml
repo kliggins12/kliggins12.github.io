@@ -1,8 +1,7 @@
 name: refresh-data
 
 on:
-  schedule:
-    - cron: '*/30 * * * *'
+  # Scheduled runs are paused during the Cloudflare migration.
   workflow_dispatch:
 
 permissions:
