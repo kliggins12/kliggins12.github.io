@@ -21,7 +21,13 @@ test("Pick 3 board geometry and initial anchors are 10x3 and 0,0,0", () => {
   assert.equal(board.rows, 10);
   assert.equal(board.columns, 3);
   assert.deepEqual(board.initialAnchors, [0, 0, 0]);
-  assert.deepEqual(board.markings, []);
+  assert.equal(board.markings.length, 3);
+  assert.deepEqual(byId(board.markings), {
+    "pick3-initial-anchor-1": { row: 0, column: 0 },
+    "pick3-initial-anchor-2": { row: 0, column: 1 },
+    "pick3-initial-anchor-3": { row: 0, column: 2 }
+  });
+  assert.ok(board.markings.every((m) => m.kind === "initial-anchor" && m.value === 0));
 });
 
 test("cascade advances an occupied chain by attacker value", () => {
@@ -122,10 +128,7 @@ test("replay freezes each assumption before seeing target digits and links rolli
           ...m,
           position: { row: draw.digits[0], column: m.position.column }
         }));
-        if (existing.length === 0) {
-          existing.push(marking("persistent", draw.digits[0], 0, "persistent"));
-        }
-        return { resultingMarkings: existing, changes: [] };
+        return { resultingMarkings: existing, changes: [];
       }
     }
   });
@@ -143,7 +146,7 @@ test("replay freezes each assumption before seeing target digits and links rolli
   assert.equal(result.steps[0].evaluation.actualDrawId, "d1");
   assert.equal(result.steps[1].evaluation.actualDrawId, "d2");
   assert.equal(result.finalBoard.asOfDate, "2020-01-03");
-  assert.deepEqual(result.steps[0].assumption.sourceBoardMarkings, []);
+  assert.equal(result.steps[0].assumption.sourceBoardMarkings.length, 3);
   assert.equal(result.steps[1].assumption.sourceBoardMarkings[0].position.row, 1);
 });
 
