@@ -47,26 +47,26 @@
 <header>
   <h1>Batch<span>mate</span></h1>
   <span class="badge">Texas players only</span>
-  <a href="slotterhouse.html" style="display:inline-block;margin-left:10px;color:var(--accent);font-size:13px;font-weight:700;text-decoration:none">Open Slotterhouse ↗</a>
+  <a href="slotterhouse.html" style="display:inline-block;margin-left:10px;color:var(--accent);font-size:13px;font-weight:700;text-decoration:none">Explore Slotterhouse ↗</a>
   <div class="meta" id="genmeta"></div>
   <span class="refreshnotice" id="refreshNotice" role="status" aria-live="polite">Automatic refresh enabled · checking data time…</span>
 </header>
 <main>
   <div class="meta" id="latestDraws" style="margin-bottom:10px"></div>
-  <h2>Doing well today — best matches on the latest draw</h2>
+  <h2>Closest matches on the latest drawing</h2>
   <div class="tightwrap">
   <table>
     <thead><tr>
-      <th>Game</th><th>Ticket</th><th>Latest match</th><th>Latest draw</th><th>Hit game / session</th>
+      <th>Game</th><th>Number combination</th><th>Closest match</th><th>Drawing date</th><th>Matching game / time</th>
     </tr></thead>
     <tbody id="hotbody"></tbody>
   </table>
   </div>
-  <h2>Readjust — combos that missed the lowest prize on the latest draw</h2>
+  <h2>Alternative combinations to review</h2>
   <div class="tightwrap">
   <table>
     <thead><tr>
-      <th>Game</th><th>Ticket</th><th>Latest match</th><th>Remake</th><th>Remake match</th><th>Latest draw</th><th>Hit game / session</th>
+      <th>Game</th><th>Original combination</th><th>Closest match</th><th>Alternative combination</th><th>Alternative match</th><th>Drawing date</th><th>Matching game / time</th>
     </tr></thead>
     <tbody id="readjbody"></tbody>
   </table>
@@ -88,7 +88,7 @@
 <script>
      (adsbygoogle = window.adsbygoogle || []).push({});
 </script></div>
-  <h2>Tightest tickets — current generated batches</h2>
+  <h2>Number combinations to review</h2>
   <div class="controls">
     <select id="tightSel"></select>
     <span class="meta" id="status"></span>
@@ -96,7 +96,7 @@
   <div class="tightwrap">
   <table>
     <thead><tr>
-      <th data-tk="ticket">Ticket</th><th data-tk="best">Best match</th><th data-tk="best_date">Best on</th><th data-tk="last">Latest</th><th data-tk="asof">Data thru</th><th data-tk="game">Game</th><th data-tk="detail">Hit game / session</th>
+      <th data-tk="ticket">Number combination</th><th data-tk="best">Closest past match</th><th data-tk="best_date">Date of best match</th><th data-tk="last">Most recent match</th><th data-tk="asof">History through</th><th data-tk="game">Game</th><th data-tk="detail">Matching game / time</th>
     </tr></thead>
     <tbody id="tightbody"></tbody>
   </table>
@@ -110,7 +110,7 @@
      (adsbygoogle = window.adsbygoogle || []).push({});
 </script></div>
   <details style="margin-top:20px">
-    <summary style="cursor:pointer;color:var(--gold);font-size:15px;font-weight:600">How Batchmate works — methodology &amp; honest math (click to expand)</summary>
+    <summary style="cursor:pointer;color:var(--gold);font-size:15px;font-weight:600">How Batchmate works (click to learn more)</summary>
     <div class="meta" style="margin-top:10px;line-height:1.6;font-size:13.5px">
       <p><b>What this is:</b> Batchmate downloads official Texas Lottery draw results for every
       draw game and generates rolling ticket batches. The "Tightest tickets" table shows the
@@ -145,7 +145,7 @@
     </div>
   </details>
   <details style="margin-top:20px">
-    <summary style="cursor:pointer;color:var(--dim);font-size:14px">Streak analysis — all combos by historical streaks (click to expand)</summary>
+    <summary style="cursor:pointer;color:var(--dim);font-size:14px">Explore past results for all number combinations (click to expand)</summary>
     <div class="controls" style="margin-top:12px">
       <select id="gameSel"></select>
       <label class="meta">show <input id="topN" type="number" value="100" min="10" max="300" style="width:70px"> tickets</label>
@@ -155,12 +155,12 @@
     <table>
       <thead><tr>
         <th data-k="ticket">Ticket</th>
-        <th data-k="best_streak">Best streak</th>
-        <th data-k="total_wins">Total wins</th>
-        <th data-k="last_win">Last win</th>
-        <th data-k="drought">Drought (draws)</th>
-        <th data-k="current_streak">Current streak</th>
-        <th data-k="streak_start">Streak span</th>
+        <th data-k="best_streak">Longest winning streak</th>
+        <th data-k="total_wins">Total winning draws</th>
+        <th data-k="last_win">Most recent win</th>
+        <th data-k="drought">Draws since last win</th>
+        <th data-k="current_streak">Current winning streak</th>
+        <th data-k="streak_start">Winning streak dates</th>
       </tr></thead>
       <tbody id="tbody"></tbody>
     </table>
@@ -183,7 +183,7 @@ let DATA = null, TIGHT = null, sortKey = 'best_streak', sortDir = -1;
 let tightKey = 'best', tightDir = -1;
 
 async function load() {
-  document.getElementById('status').textContent = 'loading data…';
+  document.getElementById('status').textContent = 'Loading drawing results…';
   if (window.BATCHMATE_DATA) {
     DATA = window.BATCHMATE_DATA;
   } else {
