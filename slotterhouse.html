@@ -40,6 +40,25 @@ nav button.active{background:linear-gradient(135deg,#244d78,#293957);border-colo
 button:focus-visible,a:focus-visible,select:focus-visible{outline:2px solid #79baff;outline-offset:3px}
 @media(prefers-reduced-motion:reduce){*,*:before,*:after{transition:none!important;scroll-behavior:auto!important}}
 
+
+/* Centered, balanced page alignment */
+header{text-align:center}
+.top{justify-content:center;text-align:center}
+nav{justify-content:center}
+main{width:min(100% - 28px,1120px);text-align:center}
+.intro{justify-content:center;text-align:center}
+.intro>div{text-align:center}
+.grid{justify-items:stretch}
+.card{text-align:center}
+.section>h2{text-align:center;padding-left:0}
+.section>h2:before{display:none}
+.section>h2:after{content:"";display:block;width:48px;height:3px;margin:8px auto 0;border-radius:4px;background:linear-gradient(90deg,var(--blue),var(--gold))}
+.tablewrap{margin-left:auto;margin-right:auto}
+table{margin-left:auto;margin-right:auto}
+th,td{text-align:center}
+.notice{text-align:center;border-left:0;border-top:3px solid var(--gold);border-radius:12px}
+footer{text-align:center}
+
 </style>
 </head>
 <body>
