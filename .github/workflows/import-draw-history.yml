@@ -1,0 +1,43 @@
+name: Import Batchmate Draw History
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  import:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Reindex all 17 archived CSV sources
+        env:
+          API_TOKEN: ${{ secrets.API_TOKEN }}
+          WORKER_URL: https://batchmate-data.kamika-us.workers.dev
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [ -z "${API_TOKEN:-}" ]; then
+            echo "Missing GitHub Actions secret API_TOKEN"
+            exit 1
+          fi
+
+          files=(
+            aon_morning.csv aon_day.csv aon_evening.csv aon_night.csv
+            pick3morning.csv pick3day.csv pick3evening.csv pick3night.csv
+            daily4morning.csv daily4day.csv daily4evening.csv daily4night.csv
+            cashfive.csv texastwostep.csv lottotexas.csv powerball.csv megamillions.csv
+          )
+
+          for file in "${files[@]}"; do
+            echo "::group::Importing ${file}"
+            response=$(curl --fail-with-body --silent --show-error \
+              --request POST \
+              --header "Authorization: Bearer ${API_TOKEN}" \
+              "${WORKER_URL}/api/admin/reindex?file=${file}")
+            echo "${response}"
+            echo "${response}" | grep -q '"ok": true'
+            echo "::endgroup::"
+          done
+
+          echo "All 17 source imports completed."
