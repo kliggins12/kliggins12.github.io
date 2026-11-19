@@ -49,10 +49,17 @@ async function sha256Hex(value: ArrayBuffer): Promise<string> {
   return [...new Uint8Array(digest)].map((b) => b.toString(16).padStart(2, "0")).join("");
 }
 
+const CORS_HEADERS = {
+  "access-control-allow-origin": "https://kliggins12.github.io",
+  "access-control-allow-methods": "GET, POST, OPTIONS",
+  "access-control-allow-headers": "authorization, content-type",
+  "vary": "Origin"
+};
+
 function json(data: unknown, status = 200): Response {
   return new Response(JSON.stringify(data, null, 2), {
     status,
-    headers: { "content-type": "application/json; charset=utf-8", "cache-control": "no-store" }
+    headers: { ...CORS_HEADERS, "content-type": "application/json; charset=utf-8", "cache-control": "no-store" }
   });
 }
 
@@ -207,6 +214,7 @@ async function ingest(env: Env): Promise<{ updated: number; unchanged: number; e
 export default {
   async fetch(request: Request, env: Env): Promise<Response> {
     const url = new URL(request.url);
+    if (request.method === "OPTIONS") return new Response(null, { status: 204, headers: CORS_HEADERS });
     if (url.pathname === "/health") return json({ ok: true, service: "batchmate-data", time: new Date().toISOString() });
 
     if (url.pathname === "/api/status") {
@@ -225,7 +233,7 @@ export default {
       const object = await env.ARCHIVE.get(record.r2_key);
       if (!object) return json({ error: "Source has not been collected yet" }, 404);
       return new Response(object.body, {
-        headers: { "content-type": "text/csv; charset=utf-8", "cache-control": "public, max-age=300", etag: object.httpEtag }
+        headers: { ...CORS_HEADERS, "content-type": "text/csv; charset=utf-8", "cache-control": "public, max-age=300", etag: object.httpEtag }
       });
     }
 
