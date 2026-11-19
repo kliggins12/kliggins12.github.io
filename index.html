@@ -109,28 +109,18 @@ header h1{font-size:clamp(28px,3.2vw,34px)}
   </nav>
 </header>
 <main>
-  <div class="meta" id="latestDraws" style="margin-bottom:10px"></div>
-  <h2>Closest matches on the latest drawing</h2>
+  <p class="meta" style="margin:0 0 16px;font-size:14px;line-height:1.5">
+    Compare generated number combinations directly with the latest official drawing for the same game and session. Match details are shown beside each combination for review; historical results do not predict future drawings.
+  </p>
+  <h2>Generated combinations vs. latest official drawings</h2>
   <div class="tightwrap">
-  <table>
-    <thead><tr>
-      <th>Game</th><th>Number combination</th><th>Closest match</th><th>Drawing date</th><th>Matching game / time</th>
-    </tr></thead>
-    <tbody id="hotbody"></tbody>
-  </table>
+    <table>
+      <thead><tr>
+        <th>Game</th><th>Session</th><th>Generated combination</th><th>Latest official drawing</th><th>Latest-draw match</th><th>Drawing date</th>
+      </tr></thead>
+      <tbody id="hotbody"></tbody>
+    </table>
   </div>
-  <h2>Alternative combinations to review</h2>
-  <div class="tightwrap">
-  <table>
-    <thead><tr>
-      <th>Game</th><th>Original combination</th><th>Closest match</th><th>Alternative combination</th><th>Alternative match</th><th>Drawing date</th><th>Matching game / time</th>
-    </tr></thead>
-    <tbody id="readjbody"></tbody>
-  </table>
-  </div>
-  <p class="meta" style="margin:0 0 14px;font-size:14px;line-height:1.5">
-    <b style="color:var(--gold)">Batchmate</b> makes it easier to review number combinations and compare them with past drawings. Results are updated as new drawings become available. Past results are for reference only and do not change the odds of future drawings.
-   </p>
   <div class="adslot" id="ad-top"><ins class="adsbygoogle"
      style="display:block"
      data-ad-format="autorelaxed"
@@ -202,7 +192,7 @@ header h1{font-size:clamp(28px,3.2vw,34px)}
   </div>
 </main>
 <script>
-let DATA = null, TIGHT = null, sortKey = 'best_streak', sortDir = -1;
+let DATA = null, TIGHT = null, latestOfficialDraws = [], sortKey = 'best_streak', sortDir = -1;
 let tightKey = 'best', tightDir = -1;
 
 async function load() {
@@ -227,28 +217,12 @@ async function load() {
     '<option value="">All games ('+TIGHT.tickets.length+')</option>' +
     games.map(g=>`<option value="${g}">${g} (${TIGHT.tickets.filter(t=>t.game===g).length})</option>`).join('');
   document.getElementById('tightSel').onchange = renderTight;
-  const latestDraws = (TIGHT.latest_draws && TIGHT.latest_draws.length) ? TIGHT.latest_draws :
-    [...new Map(TIGHT.tickets.filter(t=>t.last_draw && t.game!=='All or Nothing').map(t=>[
+  latestOfficialDraws = Array.isArray(TIGHT.latest_draws) ? TIGHT.latest_draws.slice() : [];
+  if (!latestOfficialDraws.length) {
+    latestOfficialDraws = [...new Map(TIGHT.tickets.filter(t=>t.last_draw && t.game!=='All or Nothing').map(t=>[
       (t.game||'')+'|'+(t.sess||''), {game:t.game, session:(t.sess||'').replace(/^./,x=>x.toUpperCase()), date:t.asof||'', numbers:t.last_draw}
     ])).values()];
-  const expectedAonSessions = ['Morning','Day','Evening','Night'];
-  const hasAonSessions = latestDraws.some(d=>d.game==='All or Nothing' && d.session);
-  if (!hasAonSessions) {
-    expectedAonSessions.forEach(session=>latestDraws.push({game:'All or Nothing',session,date:'',numbers:'Awaiting session-specific refresh'}));
   }
-  const byGame = {};
-  latestDraws.forEach(d=>{
-    (byGame[d.game] = byGame[d.game] || []).push(d);
-  });
-  document.getElementById('latestDraws').innerHTML =
-    '<b style="color:var(--gold)">Latest drawings today:</b> ' +
-    Object.entries(byGame).map(([g, draws])=>{
-      const parts = draws.map(d=>{
-        const session = d.session ? ' · ' + d.session : '';
-        return `<span class="ticket" style="font-size:13px">${session}: ${d.numbers} ${d.date ? '('+d.date+')' : ''}</span>`;
-      });
-      return `<span style="white-space:normal">${g}: ${parts.join(' &nbsp;|&nbsp; ')}</span>`;
-    }).join(' &nbsp;|&nbsp; ') || 'No latest draw data available';
   render();
   renderTight();
   renderHot();
@@ -257,7 +231,6 @@ async function load() {
 
 
 async function loadLatestDrawsFromCloudflare() {
-  const target = document.getElementById('latestDraws');
   try {
     const response = await fetch('https://batchmate-data.kamika-us.workers.dev/api/draws/latest', {cache:'no-store'});
     if (!response.ok) throw new Error('HTTP ' + response.status);
@@ -267,33 +240,11 @@ async function loadLatestDrawsFromCloudflare() {
     payload.draws.forEach(d => {
       (groups[d.game] = groups[d.game] || []).push(d);
     });
-    target.textContent = '';
-    const heading = document.createElement('b');
-    heading.style.color = 'var(--gold)';
-    heading.textContent = 'Latest official drawings: ';
-    target.appendChild(heading);
-    Object.entries(groups).forEach(([game, draws], index) => {
-      if (index) target.appendChild(document.createTextNode(' | '));
-      const group = document.createElement('span');
-      group.appendChild(document.createTextNode(game + ': '));
-      draws.forEach((d, i) => {
-        if (i) group.appendChild(document.createTextNode(' · '));
-        const item = document.createElement('span');
-        item.className = 'ticket';
-        item.style.fontSize = '13px';
-        const session = d.session && d.session !== 'daily' && d.session !== 'draw'
-          ? d.session.charAt(0).toUpperCase() + d.session.slice(1) + ': ' : '';
-        let numbers = d.numbers_json;
-        try { numbers = JSON.parse(numbers).join(', '); } catch (_) {}
-        item.textContent = session + numbers + ' (' + d.draw_date + ')';
-        group.appendChild(item);
-      });
-      target.appendChild(group);
-    });
+    latestOfficialDraws = payload.draws.map(d=>({...d, numbers:d.numbers_json}));
+    renderHot();
     const notice = document.getElementById('refreshNotice');
     if (notice) notice.textContent = 'Drawing history updated · ' + payload.count + ' sources';
   } catch (error) {
-    target.textContent = 'Latest drawing updates are temporarily unavailable: ' + error.message;
     console.error('Batchmate latest draw API failed:', error);
   }
 }
@@ -340,54 +291,55 @@ function renderTight() {
     </tr>`).join('');
 }
 
+function sessionKey(value) {
+  return String(value||'').trim().toLowerCase();
+}
+function latestDrawFor(ticket) {
+  const draws = Array.isArray(latestOfficialDraws) ? latestOfficialDraws : [];
+  const gameName = String(ticket.game||'').trim().toLowerCase();
+  const sess = sessionKey(ticket.sess);
+  return draws.find(d =>
+    String(d.game||'').trim().toLowerCase()===gameName &&
+    (!sess || !d.session || sessionKey(d.session)===sess)
+  ) || draws.find(d => String(d.game||'').trim().toLowerCase()===gameName);
+}
+function latestDrawNumbers(draw) {
+  if(!draw) return 'Latest drawing unavailable';
+  let value = draw.numbers ?? draw.numbers_json ?? '';
+  try { if(typeof value==='string' && value.trim().startsWith('[')) value=JSON.parse(value).join(', '); }
+  catch(_) {}
+  return String(value||'—');
+}
+function latestDrawMatch(ticket) {
+  const hits = Array.isArray(ticket.hit_sessions) ? ticket.hit_sessions : [];
+  if(hits.length) return hits.map(h=>`${h.label||h.session||ticket.game} (${h.match||'match'})`).join(' · ');
+  return 'No latest-draw match recorded';
+}
 function renderHot() {
-  const byGame = {};
-  TIGHT.tickets.forEach(t=>{
-    const m = (t.last||'').match(/(\d+)\/(\d+)/);
-    const score = m ? (+m[1])/(+m[2]) : -1;
-    (byGame[t.game] = byGame[t.game] || []).push({t, score});
-  });
   const rows = [];
-  Object.entries(byGame).forEach(([g, arr])=>{
-    arr.sort((a,b)=>b.score-a.score);
-    arr.slice(0,3).forEach(({t,score})=>rows.push({g, t, score}));
+  const byGame = {};
+  (TIGHT.tickets||[]).forEach(t=>{
+    const key = String(t.game||'');
+    (byGame[key] = byGame[key] || []).push(t);
   });
-  rows.sort((a,b)=>b.score-a.score || a.g.localeCompare(b.g));
-  document.getElementById('hotbody').innerHTML = rows.map(({g,t})=>`
-    <tr>
-      <td>${g}</td>
-      <td class="ticket">${t.ticket}</td>
-      <td class="${(()=>{const m=(t.last||'').match(/(\d+)\/(\d+)/);return m&&( +m[1]===+m[2] || (+m[2]===12&&+m[1]>=11))?'streak':''})()}">${t.last||'—'}</td>
-      <td class="meta">${t.last_draw||'—'}</td>
-      <td class="meta">${hitGameSession(t)}</td>
-    </tr>`).join('');
+  Object.entries(byGame).forEach(([game, tickets])=>{
+    tickets.slice(0,3).forEach(t=>rows.push(t));
+  });
+  document.getElementById('hotbody').innerHTML = rows.map(t=>{
+    const draw = latestDrawFor(t);
+    const session = String(t.sess||draw?.session||'—').replace(/^./,x=>x.toUpperCase());
+    return `<tr>
+      <td>${t.game||'—'}</td>
+      <td>${session}</td>
+      <td class="ticket">${t.ticket||'—'}</td>
+      <td class="ticket">${latestDrawNumbers(draw)}</td>
+      <td class="meta">${latestDrawMatch(t)}</td>
+      <td class="meta">${draw?.draw_date||draw?.date||t.asof||'—'}</td>
+    </tr>`;
+  }).join('') || '<tr><td colspan="6" class="meta">No generated combinations are available.</td></tr>';
 }
 
-function renderReadj() {
-  const byGame = {};
-  TIGHT.tickets.forEach(t=>{
-    if(!t.remake || t.last_win !== false) return;
-    const m = (t.last||'').match(/(\d+)\/(\d+)/);
-    const score = m ? (+m[1])/(+m[2]) : 0;
-    (byGame[t.game] = byGame[t.game] || []).push({t, score});
-  });
-  const rows = [];
-  Object.entries(byGame).forEach(([g, arr])=>{
-    arr.sort((a,b)=>a.score-b.score);
-    arr.slice(0,3).forEach(({t,score})=>rows.push({g, t, score}));
-  });
-  rows.sort((a,b)=>a.score-b.score || a.g.localeCompare(b.g));
-  document.getElementById('readjbody').innerHTML = rows.map(({g,t})=>`
-    <tr>
-      <td>${g}</td>
-      <td class="ticket">${t.ticket}</td>
-      <td>${t.last||'—'}</td>
-      <td class="ticket" style="color:var(--accent)">${t.remake}</td>
-      <td class="meta">${t.remake_match||'—'}</td>
-      <td class="meta">${t.last_draw||'—'}</td>
-      <td class="meta">${hitGameSession(t)}</td>
-    </tr>`).join('') || '<tr><td colspan="7" class="meta">No alternative combinations to show</td></tr>';
-}
+function renderReadj() { /* Alternative list consolidated into the latest-draw comparison table. */ }
 
 function game() { return DATA.games[+document.getElementById('gameSel').value]; }
 
