@@ -24,13 +24,13 @@ footer{border-top:1px solid var(--line);padding:20px clamp(18px,4vw,48px);color:
 </head>
 <body>
 <header>
- <div class="top"><div class="brand">Slotter<span>house</span></div><a href="./" style="color:#62a9ff;text-decoration:none;font-weight:700">← Back to Batchmate</a><span class="tag">BATCHMATE ANALYSIS</span></div>
+ <div class="top"><div class="brand">Slotter<span>house</span></div><a href="./" style="color:#62a9ff;text-decoration:none;font-weight:700">← Home</a></div>
  <nav aria-label="Slotterhouse sections">
   <button class="active" data-view="overview">Home</button><button data-view="walkthrough">Chronological Walkthrough</button><button data-view="journal">Drawing Journal</button><button data-view="shapes">Board Patterns</button><button data-view="transitions">Board Changes</button><button data-view="assumptions">Next-Draw Ideas</button><button data-view="imports">Past Drawings</button>
  </nav>
 </header>
 <main>
-<section class="intro"><div><h1 id="pageTitle">Slotterhouse overview</h1><div class="muted">Follow past drawings, see how numbers changed, and review ideas for upcoming draws.</div></div><span class="pill">Independent companion app</span></section>
+<section class="intro"><div><h1 id="pageTitle">Drawing Overview</h1><div class="muted">Follow past drawings, see how numbers changed, and review ideas for upcoming draws.</div></div></section>
 <div class="adslot" id="ad-top"><ins class="adsbygoogle"
      style="display:block"
      data-ad-format="autorelaxed"
@@ -40,17 +40,17 @@ footer{border-top:1px solid var(--line);padding:20px clamp(18px,4vw,48px);color:
      (adsbygoogle = window.adsbygoogle || []).push({});
 </script></div>
 <section id="overview" class="panelview active">
- <div class="notice">Slotterhouse is being prepared for historical board analysis. Drawing history and analysis features will become available as each part is completed. No results or probabilities are estimated without supporting history.</div>
+ <div class="notice">Review past drawings and compare number results over time.</div>
  <div class="grid section">
   <article class="card"><h3>Past drawings</h3><div class="metric" id="recordCount">0</div><div class="muted">Draws available</div></article>
-  <article class="card"><h3>Journal entries</h3><div class="metric" id="journalCount">0</div><div class="muted">Chronological observations</div></article>
-  <article class="card"><h3>Board changes</h3><div class="metric" id="transitionCount">0</div><div class="muted">Evidence-backed transitions</div></article>
-  <article class="card"><h3>Assumptions</h3><div class="metric" id="assumptionCount">0</div><div class="muted">Ideas kept separate from actual results</div></article>
+  <article class="card"><h3>Drawings Reviewed</h3><div class="metric" id="journalCount">0</div><div class="muted">Chronological observations</div></article>
+  <article class="card"><h3>Changes Over Time</h3><div class="metric" id="transitionCount">0</div><div class="muted">Past drawing comparisons</div></article>
+  <article class="card"><h3>Number Ideas</h3><div class="metric" id="assumptionCount">0</div><div class="muted">Ideas kept separate from actual results</div></article>
  </div>
  <div class="grid section">
-  <article class="card"><h2>Drawing Journal</h2><p class="muted">Review each drawing in date order, including its game, drawing time, and the exact positions of its board markings.</p><button class="subtle" data-go="journal">View journal</button></article>
-  <article class="card"><h2>Board Patterns</h2><p class="muted">See how marked positions compare from one drawing to the next, keeping each game and drawing time separate.</p><button class="subtle" data-go="shapes">View board patterns</button></article>
-  <article class="card"><h2>Board Changes</h2><p class="muted">Review which markings stayed in place, moved, appeared, or were missing between drawings.</p><button class="subtle" data-go="transitions">View board changes</button></article>
+  <article class="card"><h2>Drawing Journal</h2><p class="muted">Browse past drawings by date, game, and drawing time.</p><button class="subtle" data-go="journal">View journal</button></article>
+  <article class="card"><h2>Number Review</h2><p class="muted">Review number results from one drawing to the next.</p><button class="subtle" data-go="shapes">View number results</button></article>
+  <article class="card"><h2>Changes Over Time</h2><p class="muted">See a simple summary of how past drawing results changed over time.</p><button class="subtle" data-go="transitions">View changes</button></article>
  </div>
 </section>
 <div class="adslot" id="ad-mid"><ins class="adsbygoogle"
@@ -63,17 +63,17 @@ footer{border-top:1px solid var(--line);padding:20px clamp(18px,4vw,48px);color:
 </script></div>
 <section id="walkthrough" class="panelview">
  <div class="tablewrap">
-  <div id="pick3BoardPreview" class="pick3-board" role="img" aria-label="Pick 3 number board"></div>
+  <div id="pick3BoardPreview" class="pick3-board" role="img" aria-label="Number display"></div>
  </div>
 </section>
 <section id="journal" class="panelview">
- <div class="card"><h2>Drawing Journal</h2><p class="muted">The journal will list drawings in date order, with the game, drawing time, and board positions. Earlier entries will not change when new drawings are added.</p><div class="notice">The drawing journal is not available yet.</div></div>
+ <div class="card"><h2>Drawing Journal</h2><p class="muted">Browse drawings in date order by game and drawing time.</p><div class="notice">Drawing details will appear here when available.</div></div>
 </section>
 <section id="shapes" class="panelview">
- <div class="card"><h2>Board Patterns</h2><p class="muted">Compare the exact board positions from one drawing to the next, within the same game and drawing time.</p><div class="notice">Board patterns are not available yet. Missing positions will not be guessed.</div></div>
+ <div class="card"><h2>Number Review</h2><p class="muted">Review the numbers from one drawing alongside the next drawing for the same game and time.</p><div class="notice">Number comparisons will appear here when available.</div></div>
 </section>
 <section id="transitions" class="panelview">
- <div class="card"><h2>Changes from One Drawing to the Next</h2><p class="muted">These comparisons will show how board markings change between consecutive drawings. They will be based only on recorded history.</p><div class="notice">Board change comparisons are not available yet.</div></div>
+ <div class="card"><h2>Changes Over Time</h2><p class="muted">Review differences between past drawings in date order.</p><div class="notice">Drawing comparisons will appear here when available.</div></div>
 </section>
 <section id="assumptions" class="panelview">
  <div class="card"><h2>Ideas for the Next Drawing</h2><p class="muted">Possible number combinations will follow each game's number rules. These are working ideas only, kept separate from actual results; they are not predictions and do not improve the odds.</p><div class="notice">Next-draw ideas are not available yet while the game rules and checks are being completed.</div></div>
@@ -100,9 +100,9 @@ footer{border-top:1px solid var(--line);padding:20px clamp(18px,4vw,48px);color:
      (adsbygoogle = window.adsbygoogle || []).push({});
 </script></div>
 </main>
-<footer>Slotterhouse is an analytical companion to Batchmate. Past drawings do not alter the odds of future random drawings.</footer>
+<footer>Past drawing results are for reference only. Every drawing is random, and previous results do not change future odds.</footer>
 <script>
-const labels={overview:'Slotterhouse Home',journal:'Drawing Journal',shapes:'Board Patterns',transitions:'Board Changes',assumptions:'Next-Draw Ideas',imports:'Past Drawings'};
+const labels={overview:'Drawing Overview',journal:'Drawing Journal',shapes:'Number Review',transitions:'Changes Over Time',assumptions:'Number Ideas',imports:'Past Drawings'};
 function show(view){document.querySelectorAll('.panelview').forEach(x=>x.classList.toggle('active',x.id===view));document.querySelectorAll('nav button').forEach(x=>x.classList.toggle('active',x.dataset.view===view));document.getElementById('pageTitle').textContent=labels[view]||labels.overview;location.hash=view;}
 document.querySelectorAll('nav button').forEach(b=>b.addEventListener('click',()=>show(b.dataset.view)));
 document.querySelectorAll('[data-go]').forEach(b=>b.addEventListener('click',()=>show(b.dataset.go)));
@@ -127,7 +127,7 @@ async function loadBatchmateCsvs(){
   const select=document.getElementById('streamSelect');select.innerHTML=streamSummary.map(s=>'<option value="'+s.game+'|'+s.session+'">'+s.game+' · '+s.session+' ('+Number(s.draw_count).toLocaleString()+')</option>').join('');
   document.getElementById('loadHistoryBtn').disabled=streamSummary.length===0;
   out.innerHTML='<table><thead><tr><th>Game</th><th>Session</th><th>Number of drawings</th><th>First date</th><th>Latest date</th></tr></thead><tbody>'+streamSummary.map(s=>'<tr><td>'+s.game+'</td><td>'+s.session+'</td><td>'+Number(s.draw_count).toLocaleString()+'</td><td>'+s.first_draw_date+'</td><td>'+s.last_draw_date+'</td></tr>').join('')+'</tbody></table>';if(streamSummary.length)await loadStreamPage(true);
- }catch(e){status.textContent='History unavailable';out.textContent=e.message;console.error('Slotterhouse history connection failed:',e)}finally{btn.disabled=false}
+ }catch(e){status.textContent='History unavailable';out.textContent=e.message;console.error('Drawing history connection failed:',e)}finally{btn.disabled=false}
 }
 document.getElementById('loadCsvBtn').addEventListener('click',loadBatchmateCsvs);
 document.getElementById('loadHistoryBtn').addEventListener('click',()=>loadStreamPage(true).catch(e=>document.getElementById('csvStatus').textContent=e.message));
