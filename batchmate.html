@@ -367,8 +367,8 @@ document.querySelectorAll('th[data-tk]').forEach(th=>{
 });
 document.getElementById('gameSel').onchange = render;
 document.getElementById('topN').onchange = render;
-// auto-rebuild: reload when tab becomes visible again, and every 15 min
-setInterval(()=>{ if(!document.hidden) location.reload(); }, 15*60*1000);
+// auto-refresh: reload when tab becomes visible again, and every 30 seconds
+setInterval(()=>{ if(!document.hidden) location.reload(); }, 30*1000);
 document.addEventListener('visibilitychange', ()=>{ if(!document.hidden) location.reload(); });
 load().catch(e=>{document.getElementById('status').textContent='failed to load batchmate_data.json — run batchmate_build.py first';console.error(e)});
 </script>
