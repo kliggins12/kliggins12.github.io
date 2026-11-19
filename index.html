@@ -232,6 +232,49 @@ async function load() {
   renderReadj();
 }
 
+
+async function loadLatestDrawsFromCloudflare() {
+  const target = document.getElementById('latestDraws');
+  try {
+    const response = await fetch('https://batchmate-data.kamika-us.workers.dev/api/draws/latest', {cache:'no-store'});
+    if (!response.ok) throw new Error('HTTP ' + response.status);
+    const payload = await response.json();
+    if (!Array.isArray(payload.draws) || payload.count !== 17) throw new Error('Expected 17 latest source records; received ' + payload.count);
+    const groups = {};
+    payload.draws.forEach(d => {
+      (groups[d.game] = groups[d.game] || []).push(d);
+    });
+    target.textContent = '';
+    const heading = document.createElement('b');
+    heading.style.color = 'var(--gold)';
+    heading.textContent = 'Latest official drawings: ';
+    target.appendChild(heading);
+    Object.entries(groups).forEach(([game, draws], index) => {
+      if (index) target.appendChild(document.createTextNode(' | '));
+      const group = document.createElement('span');
+      group.appendChild(document.createTextNode(game + ': '));
+      draws.forEach((d, i) => {
+        if (i) group.appendChild(document.createTextNode(' · '));
+        const item = document.createElement('span');
+        item.className = 'ticket';
+        item.style.fontSize = '13px';
+        const session = d.session && d.session !== 'daily' && d.session !== 'draw'
+          ? d.session.charAt(0).toUpperCase() + d.session.slice(1) + ': ' : '';
+        let numbers = d.numbers_json;
+        try { numbers = JSON.parse(numbers).join(', '); } catch (_) {}
+        item.textContent = session + numbers + ' (' + d.draw_date + ')';
+        group.appendChild(item);
+      });
+      target.appendChild(group);
+    });
+    const notice = document.getElementById('refreshNotice');
+    if (notice) notice.textContent = 'Live draw history connected · ' + payload.count + ' sources';
+  } catch (error) {
+    target.textContent = 'Cloudflare draw history unavailable: ' + error.message;
+    console.error('Batchmate latest draw API failed:', error);
+  }
+}
+
 function hitGameSession(t) {
    const hits = t.hit_sessions || [];
    if (hits.length) return hits.map(h => `${h.label} (${h.match})`).join(' · ');
@@ -409,7 +452,8 @@ function startDataPolling() {
     if (!document.hidden) checkForNewData();
   });
 }
-load().then(startDataPolling).catch(e=>{document.getElementById('status').textContent='failed to load batchmate_data.json — published data is not available yet';const notice=document.getElementById('refreshNotice');if(notice)notice.textContent='Waiting for first successful data publish';console.error(e)});
+loadLatestDrawsFromCloudflare();
+load().then(startDataPolling).catch(e=>{document.getElementById('status').textContent='Ticket analysis data is not published yet';console.error(e)});
 </script>
 </body>
 </html>
