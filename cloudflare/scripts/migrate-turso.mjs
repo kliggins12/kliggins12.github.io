@@ -6,7 +6,10 @@ const authToken = process.env.TURSO_AUTH_TOKEN;
 if (!url || !authToken) throw new Error("Missing TURSO_DATABASE_URL or TURSO_AUTH_TOKEN");
 
 const sql = await readFile(new URL("../turso/0001_session_history.sql", import.meta.url), "utf8");
-const statements = sql.split(";").map((s) => s.trim()).filter(Boolean);
+const statements = sql
+  .split(";")
+  .map((s) => s.replace(/^\\s*--.*$/gm, "").trim())
+  .filter((s) => s.length > 0);
 const db = createClient({ url, authToken });
 
 try {
