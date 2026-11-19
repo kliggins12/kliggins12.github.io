@@ -20,7 +20,7 @@ function copy(marking: Marking, position = marking.position): Marking {
   return { ...marking, position: { row: position.row, column: position.column } };
 }
 
-function uniqueIds(markings: Marking[]): void {
+function validateBoard(markings: Marking[]): void {
   const ids = new Set<string>();
   const occupied = new Set<string>();
   for (const marking of markings) {
@@ -36,18 +36,15 @@ function uniqueIds(markings: Marking[]): void {
 }
 
 function rowAt(position: BoardPosition, offset: number): number {
-  return (position.row + offset + PICK3_ROWS) % PICK3_ROWS;
+  return ((position.row + offset) % PICK3_ROWS + PICK3_ROWS) % PICK3_ROWS;
 }
 
 /**
  * Cascade displacement on one Pick 3 column.
  *
- * An incoming marking takes the target slot. If occupied, each displaced
- * marking advances by the attacker's offset, wrapping around rows 0..9, until
- * an empty slot is found. No marking is silently overwritten. A full column,
- * or an offset of zero when displacement is needed, is reported as a conflict.
- *
- * This operation changes markings only; it does not alter drawing history.
+ * The incoming marking takes the target slot. Each occupant along the chosen
+ * circular path moves by the attacker's value until the first empty slot.
+ * No marking is overwritten. If the column is full, the operation fails.
  */
 export function cascadeDisplace(args: {
   markings: Marking[];
@@ -56,14 +53,15 @@ export function cascadeDisplace(args: {
   attackerValue: number;
   direction: CascadeDirection;
 }): { markings: Marking[]; changes: BoardChange[] } {
-  uniqueIds(args.markings);
+  validateBoard(args.markings);
   checkedPosition(args.target);
-  if (args.markings.some((m) => m.id === args.incoming.id)) {
-    throw new Error(`Incoming marking ${args.incoming.id} already exists on this board.`);
+  if (!args.incoming.id || args.markings.some((m) => m.id === args.incoming.id)) {
+    throw new Error("Incoming marking must have a new, non-empty ID.");
   }
   if (!Number.isInteger(args.attackerValue) || args.attackerValue < 0 || args.attackerValue > 9) {
     throw new Error("Pick 3 displacement value must be an integer from 0 through 9.");
   }
+
   const column = args.target.column;
   const step = args.attackerValue * (args.direction === "up" ? -1 : 1);
   const byRow = new Map<number, Marking>();
@@ -73,9 +71,7 @@ export function cascadeDisplace(args: {
 
   const changes: BoardChange[] = [];
   const result = args.markings.filter((m) => m.position.column !== column).map((m) => copy(m));
-  const occupant = byRow.get(args.target.row);
-
-  if (!occupant) {
+  if (!byRow.has(args.target.row)) {
     result.push(copy(args.incoming, args.target));
     changes.push({
       type: "mark",
@@ -85,34 +81,25 @@ export function cascadeDisplace(args: {
     });
     return { markings: result, changes };
   }
+  if (step === 0) throw new Error("Cannot displace an occupied slot by zero rows.");
 
-  if (step === 0) {
-    throw new Error("Cannot displace an occupied slot by zero rows.");
-  }
-
-  // Walk the circular path: target, target + step, ... until an empty slot.
   const path: number[] = [args.target.row];
-  let emptyRow = -1;
+  let foundEmpty = false;
   for (let distance = 1; distance < PICK3_ROWS; distance++) {
-    const candidate = rowAt(args.target, step * distance);
-    path.push(candidate);
-    if (!byRow.has(candidate)) {
-      emptyRow = candidate;
+    const row = rowAt(args.target, step * distance);
+    path.push(row);
+    if (!byRow.has(row)) {
+      foundEmpty = true;
       break;
     }
   }
-  if (emptyRow < 0) {
-    throw new Error("Cascade cannot insert into a completely occupied column.");
-  }
+  if (!foundEmpty) throw new Error("Cascade cannot insert into a completely occupied column.");
 
-  // Shift each occupied marking one path position toward the empty slot.
   for (let index = path.length - 1; index >= 1; index--) {
     const fromRow = path[index - 1];
     const toRow = path[index];
     const moving = byRow.get(fromRow);
-    if (!moving) {
-      throw new Error("Cascade path contains an unexpected empty slot.");
-    }
+    if (!moving) throw new Error("Cascade path contains an unexpected empty slot.");
     byRow.delete(fromRow);
     byRow.set(toRow, copy(moving, { row: toRow, column }));
     changes.push({
@@ -129,5 +116,85 @@ export function cascadeDisplace(args: {
     type: "mark",
     markingId: args.incoming.id,
     to: { ...args.target },
-    detail: "Incoming marking takes the target slot; the occupied marking chain advances to the first empty slot."
+    detail: "Incoming marking takes the target slot; displaced markings advance to the first empty slot."
   });
+  result.push(...byRow.values());
+  validateBoard(result);
+  return { markings: result, changes };
+}
+
+/** Rotate every marking in one column, with circular wrap. */
+export function rotateColumn(args: {
+  markings: Marking[];
+  column: number;
+  value: number;
+  direction: RotationDirection;
+}): { markings: Marking[]; changes: BoardChange[] } {
+  validateBoard(args.markings);
+  if (!Number.isInteger(args.column) || args.column < 0 || args.column >= PICK3_COLUMNS) {
+    throw new Error("Pick 3 column index must be 0, 1, or 2.");
+  }
+  if (!Number.isInteger(args.value) || args.value < 0 || args.value > 9) {
+    throw new Error("Pick 3 rotation value must be an integer from 0 through 9.");
+  }
+
+  const offset = args.value * (args.direction === "up" ? -1 : 1);
+  const markings = args.markings.map((marking) => {
+    if (marking.position.column !== args.column) return copy(marking);
+    return copy(marking, { row: rowAt(marking.position, offset), column: args.column });
+  });
+  const changes: BoardChange[] = [];
+  for (let index = 0; index < markings.length; index++) {
+    const before = args.markings[index];
+    const after = markings[index];
+    if (before.position.row === after.position.row && before.position.column === after.position.column) continue;
+    changes.push({
+      type: "rotate",
+      markingId: after.id,
+      from: { ...before.position },
+      to: { ...after.position },
+      detail: `Column ${args.column + 1} rotated ${args.value} rows ${args.direction} with circular wrap.`
+    });
+  }
+  validateBoard(markings);
+  return { markings, changes };
+}
+
+/** Swap only two selected markings; all unrelated markings remain fixed. */
+export function swapMarkings(args: {
+  markings: Marking[];
+  firstId: string;
+  secondId: string;
+}): { markings: Marking[]; changes: BoardChange[] } {
+  validateBoard(args.markings);
+  if (args.firstId === args.secondId) throw new Error("A marking cannot be swapped with itself.");
+  const first = args.markings.find((m) => m.id === args.firstId);
+  const second = args.markings.find((m) => m.id === args.secondId);
+  if (!first || !second) throw new Error("Both selected markings must exist on the same board.");
+
+  const markings = args.markings.map((marking) => {
+    if (marking.id === first.id) return copy(marking, second.position);
+    if (marking.id === second.id) return copy(marking, first.position);
+    return copy(marking);
+  });
+  validateBoard(markings);
+  return {
+    markings,
+    changes: [
+      {
+        type: "swap",
+        markingId: first.id,
+        from: { ...first.position },
+        to: { ...second.position },
+        detail: `Swapped with marking ${second.id}; unrelated markings remain fixed.`
+      },
+      {
+        type: "swap",
+        markingId: second.id,
+        from: { ...second.position },
+        to: { ...first.position },
+        detail: `Swapped with marking ${first.id}; unrelated markings remain fixed.`
+      }
+    ]
+  };
+}
