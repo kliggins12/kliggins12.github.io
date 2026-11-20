@@ -1,5 +1,5 @@
 import { checkTurso, getTursoClient } from "./turso";
-import { selectChangedDraws } from "./ingestion/delta";
+import { isSourceHashUnchanged, selectChangedDraws } from "./ingestion/delta";
 
 interface Env {
   DB: D1Database;
@@ -243,14 +243,29 @@ async function reindexSource(
   };
 }
 
-async function ingest(env: Env): Promise<{ updated: number; unchanged: number; errors: string[] }> {
-  const started = new Date().toISOString();
-  const run = await env.DB.prepare(
-    "INSERT INTO ingestion_runs(started_at,status,files_expected) VALUES(?,?,?)"
-  ).bind(started, "running", TX.length).run();
-  const runId = Number(run.meta.last_row_id);
-  let updated = 0, unchanged = 0;
+async function ingest(env: Env): Promise<{
+  updated: number;
+  unchanged: number;
+  checked: number;
+  skipped: boolean;
+  errors: string[];
+}> {
+  type ChangedSource = {
+    source: Source;
+    text: string;
+    bytes: Uint8Array;
+    hash: string;
+    lastModified: string | null;
+    etag: string | null;
+  };
+
+  // Phase 1: check every CSV before creating an ingestion run or writing data.
+  // A byte-identical source is a strict no-op: no archive upload, no drawing
+  // writes, no source pointer update, and no ingestion_runs insert/update.
+  const changedSources: ChangedSource[] = [];
   const errors: string[] = [];
+  let unchanged = 0;
+  let checked = 0;
 
   for (const source of TX) {
     try {
@@ -260,24 +275,60 @@ async function ingest(env: Env): Promise<{ updated: number; unchanged: number; e
       });
       if (!response.ok) throw new Error(`HTTP ${response.status}`);
       const text = await response.text();
-      if (!text.trim() || /^\s*<(?:!doctype\s+html|html)/i.test(text)) {
+      if (!text.trim() || /^\\s*<(?:!doctype\\s+html|html)/i.test(text)) {
         throw new Error("Empty response or HTML returned instead of CSV");
       }
-      if (!text.includes("\n") || !text.includes(",")) throw new Error("Response does not look like CSV");
+      if (!text.includes("\\n") || !text.includes(",")) throw new Error("Response does not look like CSV");
+
       const bytes = new TextEncoder().encode(text);
       const hash = await sha256Hex(bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength) as ArrayBuffer);
       const prior = await env.DB.prepare("SELECT sha256 FROM source_files WHERE filename=?")
         .bind(source.filename).first<{ sha256: string }>();
-      if (prior?.sha256 === hash) { unchanged++; continue; }
+      checked++;
 
+      if (isSourceHashUnchanged(prior?.sha256, hash)) {
+        unchanged++;
+        continue;
+      }
+
+      changedSources.push({
+        source,
+        text,
+        bytes,
+        hash,
+        lastModified: response.headers.get("last-modified"),
+        etag: response.headers.get("etag")
+      });
+    } catch (error) {
+      errors.push(`${source.filename}: ${error instanceof Error ? error.message : String(error)}`);
+    }
+  }
+
+  // Do not spend even the two ingestion_runs writes when all available
+  // sources are identical. Log a run only when there is actual work or an error.
+  if (changedSources.length === 0 && errors.length === 0) {
+    console.log(`CSV check complete: ${checked} checked, ${unchanged} unchanged; ingestion skipped with zero D1 writes.`);
+    return { updated: 0, unchanged, checked, skipped: true, errors };
+  }
+
+  const started = new Date().toISOString();
+  const run = await env.DB.prepare(
+    "INSERT INTO ingestion_runs(started_at,status,files_expected) VALUES(?,?,?)"
+  ).bind(started, "running", TX.length).run();
+  const runId = Number(run.meta.last_row_id);
+  let updated = 0;
+
+  for (const candidate of changedSources) {
+    const { source, text, bytes, hash, lastModified, etag } = candidate;
+    try {
       const key = `sources/${source.filename}/${hash}.csv`;
       await env.ARCHIVE.put(key, bytes, {
         httpMetadata: { contentType: "text/csv; charset=utf-8" },
         customMetadata: { game: source.game, session: source.session, sha256: hash }
       });
-      // Parse and persist the changed source before advancing its current
-      // metadata pointer. If parsing or Turso synchronization fails, the next
-      // scheduled run retries this same source instead of treating it as done.
+
+      // Persist only new or corrected draw dates in D1/Turso. Advance the
+      // source hash pointer only after all required writes have succeeded.
       await reindexSource(env, source, { r2_key: key, sha256: hash });
 
       const now = new Date().toISOString();
@@ -289,7 +340,7 @@ async function ingest(env: Env): Promise<{ updated: number; unchanged: number; e
           row_count=excluded.row_count, fetched_at=excluded.fetched_at,
           last_modified=excluded.last_modified, etag=excluded.etag, r2_key=excluded.r2_key
       `).bind(source.filename, source.url, hash, bytes.byteLength, csvRowCount(text),
-        now, response.headers.get("last-modified"), response.headers.get("etag"), key).run();
+        now, lastModified, etag, key).run();
       updated++;
     } catch (error) {
       errors.push(`${source.filename}: ${error instanceof Error ? error.message : String(error)}`);
@@ -299,10 +350,10 @@ async function ingest(env: Env): Promise<{ updated: number; unchanged: number; e
   const status = errors.length === 0 ? "success" : updated + unchanged > 0 ? "partial" : "failed";
   await env.DB.prepare(
     "UPDATE ingestion_runs SET finished_at=?,status=?,files_updated=?,error=? WHERE id=?"
-  ).bind(new Date().toISOString(), status, updated, errors.join("\n") || null, runId).run();
+  ).bind(new Date().toISOString(), status, updated, errors.join("\\n") || null, runId).run();
 
   if (errors.length) throw new Error(`Ingestion ${status}: ${errors.join("; ")}`);
-  return { updated, unchanged, errors };
+  return { updated, unchanged, checked, skipped: false, errors };
 }
 
 export default {
