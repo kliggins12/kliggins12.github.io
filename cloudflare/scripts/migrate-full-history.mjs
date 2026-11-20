@@ -389,9 +389,13 @@ try {
 
   await db.execute({
     sql: `INSERT INTO migration_runs
-      (run_id,migration_key,started_at,status,source_count,draws_expected,draws_verified)
-      VALUES(?,?,?,?,?,?,0)`,
-    args: [runId, MIGRATION_KEY, startedAt, "running", SOURCE_CATALOG.length, report.total_draws]
+      (run_id,migration_key,started_at,status,source_count,draws_expected,draws_verified,
+       source_files_expected,source_files_verified,ingestion_runs_expected,ingestion_runs_verified)
+      VALUES(?,?,?,?,?,?,0,?,0,?,0)`,
+    args: [
+      runId, MIGRATION_KEY, startedAt, "running", SOURCE_CATALOG.length,
+      report.total_draws, sourceFiles.length, ingestionRuns.length
+    ]
   });
   runCreated = true;
 
@@ -455,8 +459,14 @@ try {
   report.metadata.ingestion_runs.verified = true;
   report.status = "SUCCESS";
   await db.execute({
-    sql: "UPDATE migration_runs SET finished_at=?,status='success',draws_verified=? WHERE run_id=?",
-    args: [new Date().toISOString(), verifiedTotal, runId]
+    sql: `UPDATE migration_runs
+      SET finished_at=?,status='success',draws_verified=?,
+          source_files_verified=?,ingestion_runs_verified=?
+      WHERE run_id=?`,
+    args: [
+      new Date().toISOString(), verifiedTotal,
+      sourceFiles.length, ingestionRuns.length, runId
+    ]
   });
   process.stdout.write(JSON.stringify(report, null, 2) + "\n");
 } catch (error) {
