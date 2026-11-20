@@ -617,6 +617,11 @@ export default {
     // Read-only D1 export endpoints used only during the Turso migration.
     // They do not write to D1 and are not the public application data API.
     if (url.pathname === "/api/migration/source-files") {
+      const migrationToken = request.headers.get("authorization");
+      if (!env.API_TOKEN || migrationToken !== `Bearer ${env.API_TOKEN}`) {
+        return json({ error: "Unauthorized" }, 401);
+      }
+
       try {
         const result = await env.DB.prepare(`
           SELECT filename,source_url,sha256,bytes,row_count,fetched_at,
@@ -639,6 +644,11 @@ export default {
     }
 
     if (url.pathname === "/api/migration/ingestion-runs") {
+      const migrationToken = request.headers.get("authorization");
+      if (!env.API_TOKEN || migrationToken !== `Bearer ${env.API_TOKEN}`) {
+        return json({ error: "Unauthorized" }, 401);
+      }
+
       const beforeValue = url.searchParams.get("before");
       const before = beforeValue === null ? 0 : Number(beforeValue);
       if (beforeValue !== null && (!Number.isSafeInteger(before) || before <= 0)) {
