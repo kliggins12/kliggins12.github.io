@@ -24,6 +24,16 @@ export const SOURCE_CATALOG = Object.freeze([
 ]);
 
 const SHA256_PATTERN = /^[a-f0-9]{64}$/i;
+const EXPECTED_NUMBER_COUNTS = Object.freeze({
+  "All or Nothing": 12,
+  "Pick 3": 3,
+  "Daily 4": 4,
+  "Cash Five": 5,
+  "Texas Two Step": 5,
+  "Lotto Texas": 6,
+  "Powerball": 6,
+  "Mega Millions": 6
+});
 const DATE_PATTERN = /^\d{4}-\d{2}-\d{2}$/;
 
 export function isRealIsoDate(value) {
