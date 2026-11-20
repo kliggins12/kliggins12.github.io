@@ -1,4 +1,5 @@
 import { checkTurso, getTursoClient } from "./turso";
+import { selectChangedDraws } from "./ingestion/delta";
 
 interface Env {
   DB: D1Database;
@@ -137,7 +138,14 @@ async function reindexSource(
   env: Env,
   source: Source,
   archived?: { r2_key: string; sha256: string }
-): Promise<{ filename: string; imported: number; tursoImported: number | null }> {
+): Promise<{
+  filename: string;
+  parsed: number;
+  imported: number;
+  unchanged: number;
+  tursoImported: number | null;
+  tursoUnchanged: number | null;
+}> {
   const record = archived ?? await env.DB.prepare("SELECT r2_key,sha256 FROM source_files WHERE filename=?")
     .bind(source.filename).first<{ r2_key: string; sha256: string }>();
   if (!record) throw new Error(`No archived source found for ${source.filename}`);
@@ -148,7 +156,28 @@ async function reindexSource(
   if (draws.length === 0) throw new Error(`No valid draw rows parsed from ${source.filename}; existing history was left unchanged`);
 
   const importedAt = new Date().toISOString();
-  const statements = draws.map((draw) => env.DB.prepare(`
+
+  // Read the existing source history once, then write only dates that are
+  // new or whose actual numbers/classification changed. A changed file hash
+  // by itself must never trigger a historical rewrite.
+  const existingD1 = await env.DB.prepare(`
+    SELECT draw_date,game,session,numbers_json
+    FROM draws
+    WHERE source_filename=?
+  `).bind(source.filename).all<{
+    draw_date: string;
+    game: string;
+    session: string;
+    numbers_json: string;
+  }>();
+
+  const d1Changes = selectChangedDraws(
+    draws,
+    existingD1.results,
+    { game: source.game, session: source.session }
+  );
+
+  const d1Statements = d1Changes.map((draw) => env.DB.prepare(`
     INSERT INTO draws(source_filename,game,session,draw_date,numbers_json,source_sha256,imported_at)
     VALUES(?,?,?,?,?,?,?)
     ON CONFLICT(source_filename,draw_date) DO UPDATE SET
@@ -157,17 +186,27 @@ async function reindexSource(
   `).bind(source.filename, source.game, source.session, draw.drawDate,
     JSON.stringify(draw.numbers), record.sha256, importedAt));
 
-  for (let i = 0; i < statements.length; i += 50) {
-    await env.DB.batch(statements.slice(i, i + 50));
+  for (let i = 0; i < d1Statements.length; i += 50) {
+    await env.DB.batch(d1Statements.slice(i, i + 50));
   }
 
-  // Keep the 12 sessioned histories synchronized in Turso. D1 remains the
-  // ingestion store for all 17 sources; only Pick 3, Daily 4, and All or Nothing
-  // are mirrored into the session-history database.
+  // Keep the 12 sessioned histories synchronized in Turso. Only Pick 3,
+  // Daily 4, and All or Nothing are mirrored, and only changed draws are sent.
   let tursoImported: number | null = null;
+  let tursoUnchanged: number | null = null;
   if (["Pick 3", "Daily 4", "All or Nothing"].includes(source.game)) {
     const turso = getTursoClient(env);
-    const tursoStatements = draws.map((draw) => ({
+    const existingTursoResult = await turso.execute({
+      sql: "SELECT draw_date,numbers FROM session_draws WHERE game=? AND session=?",
+      args: [source.game, source.session]
+    });
+    const existingTurso = existingTursoResult.rows.map((row) => ({
+      draw_date: String(row.draw_date),
+      numbers_json: String(row.numbers)
+    }));
+    const tursoChanges = selectChangedDraws(draws, existingTurso);
+
+    const tursoStatements = tursoChanges.map((draw) => ({
       sql: `
         INSERT INTO session_draws(game,session,draw_date,numbers,source_file,source_hash,imported_at)
         VALUES(?,?,?,?,?,?,?)
@@ -190,10 +229,18 @@ async function reindexSource(
     for (let i = 0; i < tursoStatements.length; i += 500) {
       await turso.batch(tursoStatements.slice(i, i + 500), "write");
     }
-    tursoImported = draws.length;
+    tursoImported = tursoChanges.length;
+    tursoUnchanged = draws.length - tursoChanges.length;
   }
 
-  return { filename: source.filename, imported: draws.length, tursoImported };
+  return {
+    filename: source.filename,
+    parsed: draws.length,
+    imported: d1Changes.length,
+    unchanged: draws.length - d1Changes.length,
+    tursoImported,
+    tursoUnchanged
+  };
 }
 
 async function ingest(env: Env): Promise<{ updated: number; unchanged: number; errors: string[] }> {
