@@ -28,6 +28,10 @@ jobs:
         working-directory: cloudflare
         run: npm install
 
+      - name: Syntax-check Backup D1 seeding script
+        working-directory: cloudflare
+        run: node --check scripts/seed-backup-d1.mjs
+
       - name: Type-check Worker
         working-directory: cloudflare
         run: npm run typecheck
