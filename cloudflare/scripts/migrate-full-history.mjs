@@ -5,12 +5,13 @@ import { MIGRATION_KEY, SOURCE_CATALOG, normalizeDrawRow, normalizeSourceFile, n
 const WORKER_URL = (process.env.WORKER_URL || "https://batchmate-data.kamika-us.workers.dev").replace(/\/+$/, "");
 const DATABASE_URL = process.env.TURSO_DATABASE_URL;
 const AUTH_TOKEN = process.env.TURSO_AUTH_TOKEN;
+const API_TOKEN = process.env.API_TOKEN;
 const PAGE_SIZE = 500;
 const WRITE_BATCH_SIZE = 100;
 const APPLY = process.argv.includes("--apply");
 
-if (!DATABASE_URL || !AUTH_TOKEN) {
-  throw new Error("Missing TURSO_DATABASE_URL or TURSO_AUTH_TOKEN.");
+if (!DATABASE_URL || !AUTH_TOKEN || !API_TOKEN) {
+  throw new Error("Missing TURSO_DATABASE_URL, TURSO_AUTH_TOKEN, or API_TOKEN.");
 }
 if (APPLY && process.env.CONFIRM_PRIMARY_IMPORT !== "IMPORT-ALL-17-SOURCES") {
   throw new Error("Import blocked. Set CONFIRM_PRIMARY_IMPORT=IMPORT-ALL-17-SOURCES and pass --apply.");
@@ -52,7 +53,7 @@ async function readWorkerSource(source) {
     if (before) params.set("before", before);
 
     const response = await fetch(WORKER_URL + "/api/draws?" + params.toString(), {
-      headers: { accept: "application/json" },
+      headers: { accept: "application/json", authorization: "Bearer " + API_TOKEN },
       signal: AbortSignal.timeout(55000)
     });
     if (!response.ok) {
@@ -160,7 +161,7 @@ function fingerprintMetadata(rows, keyName) {
 
 async function readWorkerSourceFiles() {
   const response = await fetch(WORKER_URL + "/api/migration/source-files", {
-    headers: { accept: "application/json" },
+    headers: { accept: "application/json", authorization: "Bearer " + API_TOKEN },
     signal: AbortSignal.timeout(55000)
   });
   if (!response.ok) throw new Error("D1 source-file metadata read failed: HTTP " + response.status + ".");
@@ -190,7 +191,7 @@ async function readWorkerIngestionRuns() {
     const params = new URLSearchParams({ limit: "200" });
     if (before !== null) params.set("before", String(before));
     const response = await fetch(WORKER_URL + "/api/migration/ingestion-runs?" + params.toString(), {
-      headers: { accept: "application/json" },
+      headers: { accept: "application/json", authorization: "Bearer " + API_TOKEN },
       signal: AbortSignal.timeout(55000)
     });
     if (!response.ok) throw new Error("D1 ingestion-run metadata read failed: HTTP " + response.status + ".");
