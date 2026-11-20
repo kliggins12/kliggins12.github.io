@@ -17,7 +17,9 @@
 
 The current Worker is not yet Turso-primary. The current code uses D1 for source-file metadata, ingestion runs, and the indexed draw history. It also mirrors only the 12 Pick 3, Daily 4, and All or Nothing session streams into Turso. The other game histories and D1 operational metadata are not yet represented by the current Turso session-history schema.
 
-The public Batchmate homepage still reads the static batchmate_data.json and tight_tickets.json files; its generated-combination contract has not yet been ported to the Worker/Turso API. The NumberLab client now has a compatibility-aware reader: it selects the all-game Turso API only when all 17 expected feeds are present and non-empty, otherwise it uses the older 12-stream session history and labels it as limited. It renders a drawing journal, consecutive-draw comparisons, observed frequency summaries, and the recent Pick 3 sequence. These are descriptive views, not a Markov forecasting model. The NumberLab update is on the implementation branch and is not deployed. The Worker also exposes D1 and Turso endpoints, but that does not by itself make the website Turso-primary. Batchmate's generated-combination data contract and all persistent analysis/model state still require migration and parity testing.
+The implementation branch now changes the Batchmate homepage to prefer the integrity-checked `/api/primary/analysis` endpoint for `batchmate_data.json` and `tight_tickets.json`, with fallback to the existing public generated JSON files. It prefers the Turso `/api/primary/draws/latest` endpoint and falls back to the existing Worker/D1 endpoint. The two analysis snapshots are stored as versioned records in `analysis_artifacts`; a separate manually confirmed workflow validates and imports them. That workflow has not been run, so the JSON fallback remains necessary until the snapshots are present in Turso.
+
+The NumberLab client also has a compatibility-aware reader: it selects the all-game Turso API only when all 17 expected feeds are present and non-empty, otherwise it uses the older 12-stream session history and labels it as limited. It renders a drawing journal, consecutive-draw comparisons, observed frequency summaries, and the recent Pick 3 sequence. These are descriptive views, not a Markov forecasting model. Both frontend changes are on the implementation branch and are not deployed. The Worker itself is still D1-based for ingestion and legacy draw routes; these added endpoints are read-only and do not by themselves make the whole application Turso-primary.
 
 The temporary preview run is separate. It loaded 100 recent draws in each of those 12 streams into temp_preview_* tables. It did not populate the canonical session_draws table and is not a full-history migration.
 
@@ -37,7 +39,7 @@ Turso must hold the complete operational dataset required by Batchmate and Numbe
 
 ### Analysis and model data
 
-- Existing Markov models, model versions, training cutoffs, and any saved transition/frequency artifacts.
+- Any existing Markov models, model versions, training cutoffs, and saved transition/frequency artifacts that are found in the full external data inventory. No such model/artifact files were found in the scanned Batchmate and website repository trees; this does not rule out external Turso or other storage.
 - Compact analysis notes and their source-window provenance.
 - Pick 3 and Daily 4 session-specific analysis outputs.
 - All or Nothing analysis outputs and its complement/pair calculations.
@@ -161,6 +163,8 @@ Production cutover is blocked until all of the following are true:
 
 - Temporary Turso preview: completed for 1,200 sample drawing rows across 12 streams.
 - Canonical Turso full-history migration: not performed.
+- Batchmate analysis snapshots: versioned schema and guarded import workflow added; import not performed.
+- NumberLab history UI and Batchmate Turso-first fallback code: added on implementation branch; not deployed.
 - Main D1: preserved as the current complete source during migration.
 - Separate Backup D1: incomplete; not eligible for failover.
 - Production ingestion: paused.
@@ -171,4 +175,4 @@ Production cutover is blocked until all of the following are true:
 
 ## 11. Implementation branch status (2026-11-20)
 
-The branch `implementation/turso-full-history` adds an additive all-game Turso schema and a guarded migration tool. The migration tool reads the existing 17 D1-backed source feeds through the current Worker API and compares them with Turso. It has two modes: a read-only report and a separately confirmed import. The import uses idempotent upserts and verifies each source with a content fingerprint. Neither mode has been run against the live Turso database from this branch. The production Worker, frontend routing, ingestion schedule, D1 replication, and hosting route remain unchanged.
+The branch `implementation/turso-full-history` adds an additive all-game Turso schema, a guarded 17-feed plus operational metadata migration, versioned Batchmate analysis snapshot storage/import, read-only all-game Worker routes, and compatibility-aware Batchmate/NumberLab frontends. The drawing import and analysis artifact import have not been run against live Turso. The production Worker, frontend deployment, ingestion schedule, D1 replication, and hosting route remain unchanged.
