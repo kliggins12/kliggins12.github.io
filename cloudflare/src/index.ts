@@ -6,6 +6,7 @@ interface Env {
   TURSO_AUTH_TOKEN?: string;
   ARCHIVE: R2Bucket;
   API_TOKEN?: string;
+  INGEST_PAUSED?: string;
 }
 
 type Source = { filename: string; url: string; game: string; session: string };
@@ -442,6 +443,10 @@ export default {
   },
 
   async scheduled(_controller: ScheduledController, env: Env): Promise<void> {
+    if (env.INGEST_PAUSED === "true") {
+      console.log("Scheduled ingestion is paused; skipping D1 and Turso writes.");
+      return;
+    }
     await ingest(env);
   }
 };
