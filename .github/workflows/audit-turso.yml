@@ -1,0 +1,41 @@
+name: Audit Turso Session History
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  audit:
+    name: Read-only Turso audit
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Install Cloudflare project dependencies
+        working-directory: cloudflare
+        run: npm install --no-audit --no-fund
+
+      - name: Run read-only Turso audit
+        working-directory: cloudflare
+        env:
+          TURSO_READONLY_DATABASE_URL: ${{ secrets.TURSO_READONLY_DATABASE_URL }}
+          TURSO_READONLY_AUTH_TOKEN: ${{ secrets.TURSO_READONLY_AUTH_TOKEN }}
+        run: node scripts/audit-turso.mjs
+
+      - name: Upload audit report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: turso-session-history-audit
+          path: cloudflare/audit-output/
+          if-no-files-found: warn
+          retention-days: 7
