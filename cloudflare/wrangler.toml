@@ -4,6 +4,9 @@ compatibility_date = "2026-11-19"
 workers_dev = true
 account_id = "41745143f8e073c6d617c36b04d1b5cd"
 
+[vars]
+INGEST_PAUSED = "true"
+
 [triggers]
 crons = []
 
