@@ -640,7 +640,7 @@ export default {
 
     if (url.pathname === "/api/migration/ingestion-runs") {
       const beforeValue = url.searchParams.get("before");
-      const before = beforeValue === null ? null : Number(beforeValue);
+      const before = beforeValue === null ? 0 : Number(beforeValue);
       if (beforeValue !== null && (!Number.isSafeInteger(before) || before <= 0)) {
         return json({ error: "before must be a positive ingestion run ID." }, 400);
       }
@@ -649,7 +649,7 @@ export default {
         ? Math.min(200, Math.max(1, Math.trunc(requestedLimit)))
         : 100;
       try {
-        const result = before === null
+        const result = beforeValue === null
           ? await env.DB.prepare(`
               SELECT id,started_at,finished_at,status,files_expected,files_updated,error
               FROM ingestion_runs
