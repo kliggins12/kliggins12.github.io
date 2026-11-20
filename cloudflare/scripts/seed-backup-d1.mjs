@@ -236,19 +236,15 @@ async function copyDraws(maxRows) {
     FROM draws
   `)).results?.[0] || {};
   const backupCountBefore = Number(before.row_count || 0);
-  const backupMaxId = Number(before.max_id || 0);
-  const expectedIdSum = backupMaxId * (backupMaxId + 1) / 2;
-  // A count/min/max/sum check proves the existing IDs are exactly 1..MAX.
-  // If not, rescan Main from ID 0 and repair holes instead of trusting MAX(id).
-  const existingIdsContiguous =
-    backupCountBefore === backupMaxId &&
-    Number(before.min_id || 0) === (backupCountBefore ? 1 : 0) &&
-    Number(before.id_sum || 0) === expectedIdSum;
 
-  let scanAfterId = existingIdsContiguous ? backupMaxId : 0;
+  // Always scan Main from ID 0 and compare each page against Backup.
+  // This verifies existing rows as well as finding holes below MAX(id), so a
+  // high-water mark can never cause an unverified/missing row to be skipped.
+  let scanAfterId = 0;
   let copied = 0;
   let rowsWritten = 0;
   let scanned = 0;
+  let scanComplete = false;
 
   while (copied < maxRows) {
     const page = (await query(PRIMARY,
@@ -256,31 +252,29 @@ async function copyDraws(maxRows) {
        FROM draws WHERE id>? ORDER BY id LIMIT ?`,
       [scanAfterId, PAGE_SIZE]
     )).results || [];
-    if (!page.length) break;
-
-    let toWrite = page;
-    if (!existingIdsContiguous) {
-      const ids = page.map((row) => Number(row.id));
-      const existing = (await query(BACKUP, `
-        SELECT id,source_filename,game,session,draw_date,numbers_json,source_sha256,imported_at
-        FROM draws WHERE id IN (${ids.join(",")})
-      `)).results || [];
-      const byId = new Map(existing.map((row) => [Number(row.id), row]));
-      const same = (a, b) =>
-        !!b &&
-        String(a.source_filename) === String(b.source_filename) &&
-        String(a.game) === String(b.game) &&
-        String(a.session) === String(b.session) &&
-        String(a.draw_date) === String(b.draw_date) &&
-        String(a.numbers_json) === String(b.numbers_json) &&
-        String(a.source_sha256) === String(b.source_sha256) &&
-        String(a.imported_at) === String(b.imported_at);
-      toWrite = page.filter((row) => !same(row, byId.get(Number(row.id))));
+    if (!page.length) {
+      scanComplete = true;
+      break;
     }
 
-    // Enforce the configured per-run cap even when the next source page is
-    // larger than the remaining allowance. Uncopied rows are found on resume.
-    toWrite = toWrite.slice(0, Math.max(0, maxRows - copied));
+    const ids = page.map((row) => Number(row.id));
+    const existing = (await query(BACKUP, `
+      SELECT id,source_filename,game,session,draw_date,numbers_json,source_sha256,imported_at
+      FROM draws WHERE id IN (${ids.join(",")})
+    `)).results || [];
+    const byId = new Map(existing.map((row) => [Number(row.id), row]));
+    const same = (a, b) =>
+      !!b &&
+      String(a.source_filename) === String(b.source_filename) &&
+      String(a.game) === String(b.game) &&
+      String(a.session) === String(b.session) &&
+      String(a.draw_date) === String(b.draw_date) &&
+      String(a.numbers_json) === String(b.numbers_json) &&
+      String(a.source_sha256) === String(b.source_sha256) &&
+      String(a.imported_at) === String(b.imported_at);
+    const toWrite = page
+      .filter((row) => !same(row, byId.get(Number(row.id))))
+      .slice(0, Math.max(0, maxRows - copied));
 
     if (toWrite.length) {
       // Reserve before issuing the D1 batch. Six writes per draw is above the
@@ -314,9 +308,17 @@ async function copyDraws(maxRows) {
     scanned += page.length;
     scanAfterId = Number(page[page.length - 1].id);
     process.stdout.write(
-      `Scanned through Main draw ID ${scanAfterId}: ${scanned.toLocaleString()} scanned, ` +
+      `Scanned through Main draw ID ${scanAfterId}: ${scanned.toLocaleString()} checked, ` +
       `${copied.toLocaleString()} copied/repaired this run; ${rowsWritten.toLocaleString()} D1 rows written.\\n`
     );
+
+    // If the cap was reached, the next run deliberately restarts at ID 0
+    // and rechecks the verified prefix before resuming remaining missing rows.
+    if (copied >= maxRows) break;
+    if (page.length < PAGE_SIZE) {
+      scanComplete = true;
+      break;
+    }
   }
 
   const after = (await query(BACKUP, `
@@ -331,6 +333,7 @@ async function copyDraws(maxRows) {
     FROM draws
   `)).results?.[0] || {};
   const coverageMatch =
+    scanComplete &&
     backupCountAfter === mainCount &&
     Number(after.row_count || 0) === Number(mainIdStats.row_count || 0) &&
     Number(after.min_id || 0) === Number(mainIdStats.min_id || 0) &&
@@ -344,8 +347,9 @@ async function copyDraws(maxRows) {
     copiedThisRun: copied,
     scannedThisRun: scanned,
     rowsWrittenThisRun: rowsWritten,
-    resumeMode: existingIdsContiguous ? "after-contiguous-backup-high-watermark" : "full-scan-repair-missing-or-mismatched-ids",
+    resumeMode: "verified-full-scan-from-id-zero",
     nextMainId: scanAfterId,
+    scanComplete,
     complete: coverageMatch
   };
 }
