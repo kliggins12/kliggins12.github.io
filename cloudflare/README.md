@@ -60,6 +60,9 @@ The first report is expected to reveal how many rows are present in the unified 
 - `GET /api/turso/health`
 - `GET /api/session-draws/summary`
 - `GET /api/session-draws?game=...&session=...`
+- `GET /api/primary/draws/summary` (all 17 Turso feeds)
+- `GET /api/primary/draws/latest` (latest draw per source)
+- `GET /api/primary/draws?game=...&session=...&limit=...` (all-game history with date/source cursor)
 - `GET /api/sources/:filename`
 - `GET /api/draws/latest`
 - `GET /api/draws?game=...&session=...`
