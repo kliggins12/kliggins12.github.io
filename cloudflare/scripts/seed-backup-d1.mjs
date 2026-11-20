@@ -125,28 +125,13 @@ async function scalar(connection, sql) {
 }
 
 async function copyMetadata() {
-  const sources = (await query(PRIMARY,
-    "SELECT filename,source_url,sha256,bytes,row_count,fetched_at,last_modified,etag,r2_key FROM source_files ORDER BY filename"
-  )).results || [];
+  // Copy audit-run metadata first. Do not copy source hash pointers yet:
+  // Backup must not advertise a source as current until every drawing row
+  // from Main has been copied and verified.
   const runs = (await query(PRIMARY,
     "SELECT id,started_at,finished_at,status,files_expected,files_updated,error FROM ingestion_runs ORDER BY id"
   )).results || [];
 
-  const sourceStatements = sources.map((row) => rowInsert(
-    "source_files",
-    ["filename","source_url","sha256","bytes","row_count","fetched_at","last_modified","etag","r2_key"],
-    [row.filename,row.source_url,row.sha256,row.bytes,row.row_count,row.fetched_at,row.last_modified,row.etag,row.r2_key],
-    `ON CONFLICT(filename) DO UPDATE SET
-      source_url=excluded.source_url,sha256=excluded.sha256,bytes=excluded.bytes,
-      row_count=excluded.row_count,fetched_at=excluded.fetched_at,
-      last_modified=excluded.last_modified,etag=excluded.etag,r2_key=excluded.r2_key
-    WHERE source_files.source_url<>excluded.source_url OR source_files.sha256<>excluded.sha256
-      OR source_files.bytes<>excluded.bytes OR source_files.row_count<>excluded.row_count
-      OR source_files.fetched_at<>excluded.fetched_at
-      OR COALESCE(source_files.last_modified,'')<>COALESCE(excluded.last_modified,'')
-      OR COALESCE(source_files.etag,'')<>COALESCE(excluded.etag,'')
-      OR source_files.r2_key<>excluded.r2_key`
-  ));
   const runStatements = runs.map((row) => rowInsert(
     "ingestion_runs",
     ["id","started_at","finished_at","status","files_expected","files_updated","error"],
@@ -162,8 +147,33 @@ async function copyMetadata() {
       OR COALESCE(ingestion_runs.error,'')<>COALESCE(excluded.error,'')`
   ));
 
-  const writeCount = await batch(BACKUP, [...sourceStatements, ...runStatements]);
-  return { sourceFiles: sources.length, ingestionRuns: runs.length, rowsWritten: writeCount };
+  const rowsWritten = await batch(BACKUP, runStatements);
+  return { ingestionRuns: runs.length, rowsWritten };
+}
+
+async function copySourceFiles() {
+  const sources = (await query(PRIMARY,
+    "SELECT filename,source_url,sha256,bytes,row_count,fetched_at,last_modified,etag,r2_key FROM source_files ORDER BY filename"
+  )).results || [];
+
+  const statements = sources.map((row) => rowInsert(
+    "source_files",
+    ["filename","source_url","sha256","bytes","row_count","fetched_at","last_modified","etag","r2_key"],
+    [row.filename,row.source_url,row.sha256,row.bytes,row.row_count,row.fetched_at,row.last_modified,row.etag,row.r2_key],
+    `ON CONFLICT(filename) DO UPDATE SET
+      source_url=excluded.source_url,sha256=excluded.sha256,bytes=excluded.bytes,
+      row_count=excluded.row_count,fetched_at=excluded.fetched_at,
+      last_modified=excluded.last_modified,etag=excluded.etag,r2_key=excluded.r2_key
+    WHERE source_files.source_url<>excluded.source_url OR source_files.sha256<>excluded.sha256
+      OR source_files.bytes<>excluded.bytes OR source_files.row_count<>excluded.row_count
+      OR source_files.fetched_at<>excluded.fetched_at
+      OR COALESCE(source_files.last_modified,'')<>COALESCE(excluded.last_modified,'')
+      OR COALESCE(source_files.etag,'')<>COALESCE(excluded.etag,'')
+      OR source_files.r2_key<>excluded.r2_key`
+  ));
+
+  const rowsWritten = await batch(BACKUP, statements);
+  return { sourceFiles: sources.length, rowsWritten };
 }
 
 async function copyDraws(maxRows) {
@@ -173,7 +183,7 @@ async function copyDraws(maxRows) {
   let lastId = currentMax;
   let copied = 0;
   let rowsWritten = 0;
-  const target = Math.min(maxRows, Math.max(0, mainCount - backupCountBefore));
+  const target = maxRows;
 
   while (copied < target) {
     const pageLimit = Math.min(PAGE_SIZE, target - copied);
@@ -255,7 +265,7 @@ async function verify() {
   `)).results || [];
 
   const groupsMatch = JSON.stringify(mainGroups) === JSON.stringify(backupGroups);
-  return { main, backup, sourceGroupsMatch: groupsMatch };
+  return { main, backup, sourceGroupsMatch: groupsMatch, drawDataMatch: main.draws === backup.draws && groupsMatch };
 }
 
 async function main() {
@@ -273,7 +283,7 @@ async function main() {
 
   process.stdout.write(
     `Main D1 drawings: ${primaryDrawCount}; Backup D1 drawings: ${backupDrawCount}; ` +
-    `Backup D1 rows written today (UTC): ${usage.rowsWritten}.\n`
+    `Backup D1 rows written today (UTC): ${usage.rowsWritten}.\\n`
   );
 
   if (remaining > 0 && rowsThisRun === 0) {
@@ -282,16 +292,27 @@ async function main() {
 
   const metadata = await copyMetadata();
   process.stdout.write(
-    `Metadata sync: ${metadata.sourceFiles} source files, ${metadata.ingestionRuns} ingestion runs, ` +
-    `${metadata.rowsWritten} rows written.\n`
+    `Audit metadata sync: ${metadata.ingestionRuns} ingestion runs, ${metadata.rowsWritten} rows written.\\n`
   );
 
   const draws = await copyDraws(rowsThisRun);
-  const verification = await verify();
-  process.stdout.write(JSON.stringify({ metadata, draws, verification }, null, 2) + "\n");
+  const prePromotion = await verify();
 
-  if (!verification.sourceGroupsMatch && verification.backup.draws >= verification.main.draws) {
+  let sourceMetadata = { sourceFiles: 0, rowsWritten: 0, promoted: false };
+  if (prePromotion.drawDataMatch) {
+    sourceMetadata = { ...(await copySourceFiles()), promoted: true };
+  } else {
+    process.stdout.write("Backup drawing data is incomplete or does not yet match Main; source hash pointers remain unpromoted.\\n");
+  }
+
+  const verification = await verify();
+  process.stdout.write(JSON.stringify({ metadata, draws, sourceMetadata, verification }, null, 2) + "\\n");
+
+  if (draws.complete && !verification.drawDataMatch) {
     throw new Error("Backup draw groups do not match Main. Do not activate Backup until reconciled.");
+  }
+  if (sourceMetadata.promoted && verification.backup.sources !== verification.main.sources) {
+    throw new Error("Backup source metadata count does not match Main.");
   }
 }
 
