@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { SOURCE_CATALOG, isRealIsoDate, normalizeDrawRow } from "../scripts/lib/full-history.mjs";
+import { SOURCE_CATALOG, isRealIsoDate, normalizeDrawRow, normalizeSourceFile, normalizeIngestionRun } from "../scripts/lib/full-history.mjs";
 
 const source = SOURCE_CATALOG.find((item) => item.filename === "pick3morning.csv");
 const validRow = {
@@ -69,4 +69,56 @@ test("rejects a draw with the wrong number count for its game", () => {
     () => normalizeDrawRow({ ...validRow, numbers_json: "[2,4]" }, source),
     /expected count/
   );
+});
+
+
+test("normalizes source-file metadata without losing archive provenance", () => {
+  const source = SOURCE_CATALOG[0];
+  const row = normalizeSourceFile({
+    filename: source.filename,
+    source_url: "https://example.com/source.csv",
+    sha256: "b".repeat(64),
+    bytes: 1200,
+    row_count: 100,
+    fetched_at: "2026-11-20T05:00:00.000Z",
+    last_modified: null,
+    etag: "etag-value",
+    r2_key: `sources/${source.filename}/${"b".repeat(64)}.csv`
+  }, source);
+  assert.equal(row.filename, source.filename);
+  assert.equal(row.sha256, "b".repeat(64));
+  assert.equal(row.etag, "etag-value");
+});
+
+test("rejects source metadata with a mismatched archive key", () => {
+  const source = SOURCE_CATALOG[0];
+  assert.throws(() => normalizeSourceFile({
+    filename: source.filename,
+    source_url: "https://example.com/source.csv",
+    sha256: "b".repeat(64),
+    bytes: 1200,
+    row_count: 100,
+    fetched_at: "2026-11-20T05:00:00.000Z",
+    r2_key: "wrong/path.csv"
+  }, source), /Invalid R2 archive key/);
+});
+
+test("normalizes full ingestion-run history with nullable completion fields", () => {
+  assert.deepEqual(normalizeIngestionRun({
+    id: 9,
+    started_at: "2026-11-20T05:00:00.000Z",
+    finished_at: null,
+    status: "running",
+    files_expected: 17,
+    files_updated: 0,
+    error: null
+  }), {
+    id: 9,
+    started_at: "2026-11-20T05:00:00.000Z",
+    finished_at: null,
+    status: "running",
+    files_expected: 17,
+    files_updated: 0,
+    error: null
+  });
 });
