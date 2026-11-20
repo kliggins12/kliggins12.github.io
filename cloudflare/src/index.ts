@@ -384,9 +384,14 @@ export default {
         const db = getTursoClient(env);
         const result = await db.execute(
           "SELECT artifact_key,payload_json,payload_sha256,generated_at,payload_bytes,imported_at " +
-          "FROM analysis_artifacts WHERE artifact_key IN ('batchmate_data','tight_tickets')"
+          "FROM analysis_artifacts WHERE artifact_key IN ('batchmate_data','tight_tickets') " +
+          "ORDER BY artifact_key,generated_at DESC"
         );
-        const artifacts = new Map(result.rows.map((row) => [String(row.artifact_key), row]));
+        const artifacts = new Map();
+        for (const row of result.rows) {
+          const key = String(row.artifact_key);
+          if (!artifacts.has(key)) artifacts.set(key, row);
+        }
         const batchmateRow = artifacts.get("batchmate_data");
         const tightRow = artifacts.get("tight_tickets");
         if (!batchmateRow || !tightRow) {
