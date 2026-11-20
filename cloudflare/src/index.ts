@@ -361,6 +361,63 @@ async function ingest(env: Env): Promise<{
 // Turso-primary source ingestion. This path writes canonical drawings,
 // source metadata, and operational history to Turso only. It does not write
 // to D1. Raw CSV versions remain in R2 for recovery and audit.
+async function assertPrimaryHistoryVerified(env: Env): Promise<{
+  migrationKey: string;
+  runId: string;
+  verifiedAt: string;
+  drawCount: number;
+}> {
+  const db = getTursoClient(env);
+  const result = await db.execute({
+    sql: `SELECT run_id,migration_key,started_at,finished_at,status,source_count,
+                 draws_expected,draws_verified,source_files_expected,source_files_verified,
+                 ingestion_runs_expected,ingestion_runs_verified
+          FROM migration_runs
+          WHERE migration_key='primary-history-v1'
+          ORDER BY started_at DESC
+          LIMIT 1`
+  });
+  if (!result.rows.length) {
+    throw new Error("The complete 17-source Turso history has not been migrated and verified.");
+  }
+
+  const run = result.rows[0];
+  const sourceCount = Number(run.source_count);
+  const drawsExpected = Number(run.draws_expected);
+  const drawsVerified = Number(run.draws_verified);
+  const sourceFilesExpected = Number(run.source_files_expected);
+  const sourceFilesVerified = Number(run.source_files_verified);
+  const ingestionRunsExpected = Number(run.ingestion_runs_expected);
+  const ingestionRunsVerified = Number(run.ingestion_runs_verified);
+
+  if (String(run.status) !== "success" ||
+      sourceCount !== TX.length ||
+      drawsExpected <= 0 ||
+      drawsVerified !== drawsExpected ||
+      sourceFilesExpected !== TX.length ||
+      sourceFilesVerified !== TX.length ||
+      ingestionRunsExpected !== ingestionRunsVerified) {
+    throw new Error("The latest Turso primary-history migration did not pass exact verification.");
+  }
+
+  const progress = await db.execute({
+    sql: `SELECT COUNT(*) AS complete_sources
+          FROM migration_source_progress
+          WHERE migration_key='primary-history-v1' AND status='complete'`
+  });
+  const completeSources = Number(progress.rows[0]?.complete_sources ?? 0);
+  if (completeSources !== TX.length) {
+    throw new Error(`Turso primary-history verification covers ${completeSources} of ${TX.length} sources.`);
+  }
+
+  return {
+    migrationKey: String(run.migration_key),
+    runId: String(run.run_id),
+    verifiedAt: String(run.finished_at ?? run.started_at),
+    drawCount: drawsVerified
+  };
+}
+
 async function reindexSourceToTurso(
   env: Env,
   source: Source,
@@ -499,6 +556,7 @@ async function ingestToTurso(env: Env): Promise<{
     etag: string | null;
   };
 
+  await assertPrimaryHistoryVerified(env);
   const db = getTursoClient(env);
   const priorResult = await db.execute("SELECT filename,sha256 FROM source_files");
   const priorHashes = new Map(priorResult.rows.map((row) => [
@@ -644,6 +702,7 @@ export default {
     // the full-history migration has been verified and cutover is approved.
     if (url.pathname === "/api/primary/analysis") {
       try {
+        const verifiedHistory = await assertPrimaryHistoryVerified(env);
         const db = getTursoClient(env);
         const result = await db.execute(
           "SELECT artifact_key,payload_json,payload_sha256,generated_at,payload_bytes,imported_at " +
@@ -699,6 +758,7 @@ export default {
         return json({
           ok: true,
           storage: "turso-primary",
+          migration: verifiedHistory,
           artifacts: {
             batchmate_data: {
               generated_at: String(batchmateRow.generated_at),
@@ -725,6 +785,7 @@ export default {
 
     if (url.pathname === "/api/primary/draws/summary") {
       try {
+        const verifiedHistory = await assertPrimaryHistoryVerified(env);
         const db = getTursoClient(env);
         const result = await db.execute(`
           SELECT game, session, COUNT(*) AS draw_count,
@@ -744,6 +805,7 @@ export default {
         return json({
           ok: true,
           storage: "turso-primary",
+          migration: verifiedHistory,
           streamCount: streams.length,
           drawCount: streams.reduce((sum, stream) => sum + stream.draw_count, 0),
           streams
@@ -759,6 +821,7 @@ export default {
 
     if (url.pathname === "/api/primary/draws/latest") {
       try {
+        const verifiedHistory = await assertPrimaryHistoryVerified(env);
         const db = getTursoClient(env);
         const result = await db.execute(`
           SELECT d.source_filename, d.game, d.session, d.draw_date, d.numbers_json
@@ -779,7 +842,7 @@ export default {
           draw_date: String(row.draw_date),
           numbers_json: String(row.numbers_json)
         }));
-        return json({ ok: true, storage: "turso-primary", count: draws.length, draws });
+        return json({ ok: true, storage: "turso-primary", migration: verifiedHistory, count: draws.length, draws });
       } catch (error) {
         return json({
           ok: false,
@@ -846,6 +909,7 @@ export default {
       }
 
       try {
+        const verifiedHistory = await assertPrimaryHistoryVerified(env);
         const db = getTursoClient(env);
         const result = await db.execute({
           sql: `SELECT source_filename,game,session,draw_date,numbers_json,source_sha256,imported_at
@@ -867,6 +931,7 @@ export default {
         return json({
           ok: true,
           storage: "turso-primary",
+          migration: verifiedHistory,
           count: draws.length,
           draws,
           nextBefore: draws.length === limit ? draws[draws.length - 1].draw_date : null,
@@ -1125,6 +1190,7 @@ export default {
       const source = TX.find((item) => item.filename === filename);
       if (!source) return json({ error: "Supply one valid source filename using ?file=" + TX.map((item) => item.filename).join(",") }, 400);
       try {
+        await assertPrimaryHistoryVerified(env);
         const db = getTursoClient(env);
         const record = await db.execute({
           sql: "SELECT r2_key,sha256 FROM source_files WHERE filename=?",
