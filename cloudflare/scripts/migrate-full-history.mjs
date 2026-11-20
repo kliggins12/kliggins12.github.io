@@ -282,6 +282,6 @@ try {
 } finally {
   await db.close();
 }
-
+}
 
 await main();
