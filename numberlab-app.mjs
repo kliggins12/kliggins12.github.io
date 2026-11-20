@@ -256,7 +256,7 @@ async function refreshDrawingHistory() {
       await new Promise((resolve) => setTimeout(resolve, 1500));
       const response = await fetchJson(DATA_API + "/api/primary/refresh/status?jobId=" + encodeURIComponent(job.jobId));
       if (response.status === "completed" || response.status === "failed") finished = response;
-      else if (status) status.textContent = "Checking and updating drawing history…";
+      else if (status) status.textContent = response.detail || "Checking and updating drawing history…";
     }
 
     if (finished.status === "failed") {

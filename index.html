@@ -223,60 +223,24 @@ async function readJson(url) {
   return await response.json();
 }
 
-async function readLegacyArtifact(localPath, remotePath) {
-  try { return await readJson(localPath + '?ts=' + Date.now()); }
-  catch (localError) { return await readJson(remotePath + '?ts=' + Date.now()); }
-}
-
 async function load() {
-  document.getElementById('status').textContent = 'Loading drawing results…';
-  if (window.BATCHMATE_DATA) {
-    DATA = window.BATCHMATE_DATA;
-    DATA_SOURCE = 'injected';
-  } else {
-    try {
-      const payload = await readJson(DATA_API + '/api/primary/analysis');
-      if (!payload || payload.ok !== true || !payload.batchmate_data || !payload.tight_tickets ||
-          !Array.isArray(payload.batchmate_data.games) || !Array.isArray(payload.tight_tickets.tickets)) {
-        throw new Error('Local analysis snapshots are not available yet');
-      }
-      DATA = payload.batchmate_data;
-      TIGHT = payload.tight_tickets;
-      DATA_SOURCE = 'local-sqlite-primary';
-    } catch (primaryError) {
-      DATA = await readLegacyArtifact(
-        'batchmate_data.json',
-        'https://raw.githubusercontent.com/kliggins12/batchmate/master/batchmate_data.json'
-      );
-      DATA_SOURCE = 'legacy-published-snapshot';
-    }
+  document.getElementById('status').textContent = 'Loading local drawing analysis…';
+  const payload = await readJson(DATA_API + '/api/primary/analysis');
+  if (!payload || payload.ok !== true || payload.storage !== 'local-sqlite' ||
+      !payload.batchmate_data || !payload.tight_tickets ||
+      !Array.isArray(payload.batchmate_data.games) || !Array.isArray(payload.tight_tickets.tickets)) {
+    throw new Error('Local SQLite analysis is not ready. Use Refresh drawing history to build it.');
   }
-
-  if (!TIGHT) {
-    try {
-      TIGHT = await readLegacyArtifact(
-        'tight_tickets.json',
-        'https://raw.githubusercontent.com/kliggins12/batchmate/master/tight_tickets.json'
-      );
-    } catch (error) {
-      if (DATA_SOURCE === 'local-sqlite-primary') throw error;
-      TIGHT = { tickets: [], latest_draws: [] };
-    }
-  }
-  if (!DATA || !Array.isArray(DATA.games) || !DATA.games.length) {
-    throw new Error('Batchmate analysis data is missing its game summaries.');
-  }
-  if (!TIGHT || !Array.isArray(TIGHT.tickets)) {
-    throw new Error('Batchmate tight-ticket data is missing its ticket list.');
+  DATA = payload.batchmate_data;
+  TIGHT = payload.tight_tickets;
+  DATA_SOURCE = 'local-sqlite-primary';
+  if (!DATA.games.length || !TIGHT.tickets.length) {
+    throw new Error('Batchmate analysis is missing game summaries or generated tickets.');
   }
 
   document.getElementById('genmeta').textContent = 'Updated ' + DATA.generated;
   const notice = document.getElementById('refreshNotice');
-  if (notice) {
-    const sourceLabel = DATA_SOURCE === 'local-sqlite-primary' ? 'Local SQLite analysis' :
-      DATA_SOURCE === 'injected' ? 'Embedded data' : 'Published analysis snapshot';
-    notice.textContent = sourceLabel + ' · generated ' + DATA.generated;
-  }
+  if (notice) notice.textContent = 'Local SQLite analysis · generated ' + DATA.generated;
   const sel = document.getElementById('gameSel');
   sel.innerHTML = DATA.games.map((g,i)=>`<option value="${i}">${g.name} — ${g.pick} (${g.n_tickets.toLocaleString()} combos, ${g.n_draws.toLocaleString()} draws)</option>`).join('');
   const games = [...new Set(TIGHT.tickets.map(t=>t.game))];
@@ -294,6 +258,8 @@ async function load() {
   renderTight();
   renderHot();
   renderReadj();
+  document.getElementById('status').textContent =
+    TIGHT.tickets.length.toLocaleString() + ' generated combinations · local SQLite';
 }
 
 async function refreshBatchmateDrawingHistory() {
@@ -315,20 +281,22 @@ async function refreshBatchmateDrawingHistory() {
     }
     if (!job.jobId) throw new Error(job.error || 'The drawing refresh did not return a job ID.');
     let finished = null;
-    for (let attempt = 0; attempt < 180 && !finished; attempt++) {
+    for (let attempt = 0; attempt < 1800 && !finished; attempt++) {
       await new Promise(resolve => setTimeout(resolve, 1500));
       const response = await readJson(DATA_API + '/api/primary/refresh/status?jobId=' + encodeURIComponent(job.jobId));
       if (response.status === 'completed' || response.status === 'failed') finished = response;
+      else if (notice && response.detail) notice.textContent = response.detail;
     }
     if (!finished) throw new Error('The refresh is taking longer than expected. Reload to check its result.');
-    if (finished.status === 'failed') throw new Error(finished.error || 'The official feeds could not be refreshed.');
+    if (finished.status === 'failed') throw new Error(finished.error || 'The official feeds or analysis could not be refreshed.');
     const result = finished.result || {};
     const changed = Number(result.new_or_corrected_draws || 0);
     const checked = Number(result.checked || 0);
+    await load();
     await loadLatestDrawsFromLocalApi();
     if (notice) notice.textContent = changed
-      ? 'Drawing history updated · ' + changed.toLocaleString() + ' new or corrected drawings · ' + checked + ' feeds checked'
-      : 'Drawing history is up to date · all ' + checked + ' official feeds checked';
+      ? 'Drawing history updated · ' + changed.toLocaleString() + ' new or corrected drawings · ticket analysis rebuilt'
+      : 'Drawing history is up to date · all ' + checked + ' feeds checked · ticket analysis current';
   } catch (error) {
     if (notice) notice.textContent = 'Drawing history refresh failed · ' + error.message;
   } finally {
@@ -511,18 +479,11 @@ async function checkForNewData() {
   if (document.hidden || refreshCheckInFlight || refreshedBuild === (DATA && DATA.generated)) return;
   refreshCheckInFlight = true;
   try {
-    let latest;
-    if (DATA_SOURCE === 'local-sqlite-primary') {
-      const payload = await readJson(DATA_API + '/api/primary/analysis');
-      if (!payload || payload.ok !== true || !payload.batchmate_data) throw new Error('Local analysis snapshot is not ready');
-      latest = payload.batchmate_data;
-    } else {
-      try {
-        latest = await readJson('batchmate_data.json?check=' + Date.now());
-      } catch (error) {
-        latest = await readJson('https://raw.githubusercontent.com/kliggins12/batchmate/master/batchmate_data.json?check=' + Date.now());
-      }
+    const payload = await readJson(DATA_API + '/api/primary/analysis');
+    if (!payload || payload.ok !== true || !payload.batchmate_data) {
+      throw new Error('Local SQLite analysis is not ready');
     }
+    const latest = payload.batchmate_data;
     if (latest.generated && DATA && latest.generated !== DATA.generated) {
       clearInterval(refreshTimer);
       sessionStorage.setItem('batchmate-refreshed-build', latest.generated);
