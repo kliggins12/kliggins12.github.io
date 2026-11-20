@@ -159,11 +159,15 @@ function renderStreamSummary(payload) {
   const recordCount = document.getElementById("recordCount");
   if (recordCount) recordCount.textContent = count.toLocaleString();
   if (streamSelect) {
+    const previousSelection = streamSelect.value;
     streamSelect.innerHTML = state.streams.map((stream) => {
       const key = stream.game + "|" + stream.session;
       const label = stream.game + " · " + stream.session + " (" + Number(stream.draw_count).toLocaleString() + ")";
       return '<option value="' + escapeHtml(key) + '">' + escapeHtml(label) + "</option>";
     }).join("");
+    if (previousSelection && state.streams.some((stream) => stream.game + "|" + stream.session === previousSelection)) {
+      streamSelect.value = previousSelection;
+    }
   }
   if (out) {
     const rows = state.streams.map((stream) =>
@@ -223,6 +227,65 @@ function selectedStream() {
   const separator = value.indexOf("|");
   if (separator < 0) return null;
   return { game: value.slice(0, separator), session: value.slice(separator + 1) };
+}
+
+async function refreshDrawingHistory() {
+  const button = document.getElementById("refreshHistoryBtn");
+  const status = document.getElementById("csvStatus");
+  const selectedValue = document.getElementById("streamSelect")?.value || "";
+  if (!button || button.disabled) return;
+
+  button.disabled = true;
+  button.textContent = "Refreshing…";
+  if (status) status.textContent = "Checking all 17 official drawing feeds…";
+
+  try {
+    const startResponse = await fetch(DATA_API + "/api/primary/refresh", {
+      method: "POST", cache: "no-store", headers: { accept: "application/json" }
+    });
+    let job;
+    try { job = await startResponse.json(); }
+    catch { throw new Error("The drawing service returned an unreadable refresh response."); }
+    if (![202, 409].includes(startResponse.status)) {
+      throw new Error(job.error || job.message || ("Refresh could not start (HTTP " + startResponse.status + ")."));
+    }
+    if (!job.jobId) throw new Error(job.error || "The drawing refresh did not return a job ID.");
+
+    let finished = null;
+    while (!finished) {
+      await new Promise((resolve) => setTimeout(resolve, 1500));
+      const response = await fetchJson(DATA_API + "/api/primary/refresh/status?jobId=" + encodeURIComponent(job.jobId));
+      if (response.status === "completed" || response.status === "failed") finished = response;
+      else if (status) status.textContent = "Checking and updating drawing history…";
+    }
+
+    if (finished.status === "failed") {
+      throw new Error(finished.error || "The official drawing feeds could not be refreshed. No partial import was applied.");
+    }
+
+    const result = finished.result || {};
+    const changed = Number(result.new_or_corrected_draws || 0);
+    const checked = Number(result.checked || 0);
+    await loadSummary();
+
+    const selector = document.getElementById("streamSelect");
+    if (selector && selectedValue && Array.from(selector.options).some((option) => option.value === selectedValue)) {
+      selector.value = selectedValue;
+      state.selected = selectedStream();
+      state.historyRows = [];
+      state.cursor = null;
+      await loadStreamPage(true);
+    }
+
+    if (status) status.textContent = changed
+      ? "History updated: " + changed.toLocaleString() + " new or corrected drawings across " + checked + " feeds."
+      : "History is up to date. All " + checked + " official feeds were checked; no new drawings were found.";
+  } catch (error) {
+    if (status) status.textContent = "Refresh failed: " + error.message;
+  } finally {
+    button.disabled = false;
+    button.textContent = "Refresh drawing history";
+  }
 }
 
 async function loadStreamPage(reset) {
@@ -421,6 +484,7 @@ async function initialize() {
   if (["overview", "walkthrough", "journal", "shapes", "transitions", "assumptions", "imports"].includes(initialView)) show(initialView);
 
   document.getElementById("loadCsvBtn")?.addEventListener("click", loadSummary);
+  document.getElementById("refreshHistoryBtn")?.addEventListener("click", refreshDrawingHistory);
   document.getElementById("loadHistoryBtn")?.addEventListener("click", () => loadStreamPage(true));
   document.getElementById("loadMoreHistoryBtn")?.addEventListener("click", () => loadStreamPage(false));
   document.getElementById("streamSelect")?.addEventListener("change", () => {

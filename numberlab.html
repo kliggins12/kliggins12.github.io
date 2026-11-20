@@ -39,6 +39,11 @@ nav button.active{background:linear-gradient(135deg,#244d78,#293957);border-colo
 .notice{border-left-color:var(--gold);background:linear-gradient(100deg,#2a261e,#211f1b);border-radius:0 12px 12px 0}
 .adslot{border-radius:13px;background:linear-gradient(120deg,rgba(23,35,55,.9),rgba(30,35,53,.9))}
 button:focus-visible,a:focus-visible,select:focus-visible{outline:2px solid #79baff;outline-offset:3px}
+
+/* Shared format for all drawing-history action buttons */
+.action,.subtle{display:inline-flex;align-items:center;justify-content:center;min-height:46px;padding:10px 14px;border:1px solid #37699c;border-radius:9px;background:#21466e;color:#fff;font:inherit;text-decoration:none;cursor:pointer;box-shadow:0 3px 10px rgba(0,0,0,.14)}
+.action:hover,.subtle:hover{background:#28547f;border-color:#69b2ff}
+.action:disabled,.subtle:disabled{opacity:.55;cursor:not-allowed}
 @media(prefers-reduced-motion:reduce){*,*:before,*:after{transition:none!important;scroll-behavior:auto!important}}
 
 
@@ -143,7 +148,7 @@ nav .nav-link{display:inline-block;border:1px solid var(--line);background:var(-
 </section>
 <section id="imports" class="panelview">
  <div class="card"><h2>Past Drawings</h2><p class="muted">Choose a game and drawing time to browse its past results.</p>
- <p><button class="action" id="loadCsvBtn" type="button">Load past drawings</button> <span class="muted" id="csvStatus" role="status">Select this button to display the available games and drawing times.</span></p>
+ <p style="display:flex;gap:10px;flex-wrap:wrap;align-items:center;justify-content:center"><button class="action" id="loadCsvBtn" type="button">Load past drawings</button><button class="subtle" id="refreshHistoryBtn" type="button">Refresh drawing history</button><span class="muted" id="csvStatus" role="status" aria-live="polite">Select “Load past drawings” to display the available games and drawing times.</span></p>
  <div id="csvResults" class="tablewrap muted">First select “Load past drawings,” then choose a game and drawing time.</div>
  <div class="section" style="display:flex;gap:10px;flex-wrap:wrap;align-items:center">
   <label for="streamSelect" class="muted">1. Choose a game and drawing time</label>

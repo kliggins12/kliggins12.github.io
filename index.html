@@ -22,6 +22,9 @@
   button:hover { border-color:var(--accent); }
   .refreshnotice { display:inline-flex; align-items:center; gap:7px; background:#142b27; border:1px solid #286354; border-radius:20px; padding:6px 11px; color:#a8e6d2; font-size:12px; white-space:normal; }
   .refreshnotice::before { content:""; width:7px; height:7px; border-radius:50%; background:#55c99a; flex:0 0 auto; }
+  .history-refresh-button{display:inline-flex;align-items:center;justify-content:center;min-height:46px;padding:10px 14px;border:1px solid #37699b;border-radius:9px;background:#21466e;color:#fff;font:inherit;cursor:pointer;box-shadow:0 3px 10px rgba(0,0,0,.14)}
+  .history-refresh-button:hover{background:#28547f;border-color:#69b2ff}
+  .history-refresh-button:disabled{opacity:.55;cursor:not-allowed}
   .statcards { display:flex; gap:10px; flex-wrap:wrap; margin-bottom:14px; }
   .card { background:var(--panel); border:1px solid #2a3450; border-radius:10px; padding:10px 16px; min-width:130px; }
   .card b { display:block; font-size:18px; color:var(--accent); }
@@ -114,6 +117,7 @@ header h1{font-size:clamp(28px,3.2vw,34px)}
   
   <div class="meta" id="genmeta"></div>
   <span class="refreshnotice" id="refreshNotice" role="status" aria-live="polite">Checking for the latest drawing updates…</span>
+  <button class="history-refresh-button" id="batchmateRefreshHistory" type="button">Refresh drawing history</button>
   <nav class="site-nav" aria-label="Main navigation">
     <a class="active" href="index.html" aria-current="page">Batchmate</a>
     <a href="numberlab.html">NumberLab</a>
@@ -290,6 +294,47 @@ async function load() {
   renderTight();
   renderHot();
   renderReadj();
+}
+
+async function refreshBatchmateDrawingHistory() {
+  const button = document.getElementById('batchmateRefreshHistory');
+  const notice = document.getElementById('refreshNotice');
+  if (!button || button.disabled) return;
+  button.disabled = true;
+  button.textContent = 'Refreshing…';
+  if (notice) notice.textContent = 'Checking all 17 official drawing feeds…';
+  try {
+    const startResponse = await fetch(DATA_API + '/api/primary/refresh', {
+      method: 'POST', cache: 'no-store', headers: { accept: 'application/json' }
+    });
+    let job;
+    try { job = await startResponse.json(); }
+    catch { throw new Error('The drawing service returned an unreadable refresh response.'); }
+    if (![202,409].includes(startResponse.status)) {
+      throw new Error(job.error || job.message || ('Refresh could not start (HTTP ' + startResponse.status + ').'));
+    }
+    if (!job.jobId) throw new Error(job.error || 'The drawing refresh did not return a job ID.');
+    let finished = null;
+    for (let attempt = 0; attempt < 180 && !finished; attempt++) {
+      await new Promise(resolve => setTimeout(resolve, 1500));
+      const response = await readJson(DATA_API + '/api/primary/refresh/status?jobId=' + encodeURIComponent(job.jobId));
+      if (response.status === 'completed' || response.status === 'failed') finished = response;
+    }
+    if (!finished) throw new Error('The refresh is taking longer than expected. Reload to check its result.');
+    if (finished.status === 'failed') throw new Error(finished.error || 'The official feeds could not be refreshed.');
+    const result = finished.result || {};
+    const changed = Number(result.new_or_corrected_draws || 0);
+    const checked = Number(result.checked || 0);
+    await loadLatestDrawsFromLocalApi();
+    if (notice) notice.textContent = changed
+      ? 'Drawing history updated · ' + changed.toLocaleString() + ' new or corrected drawings · ' + checked + ' feeds checked'
+      : 'Drawing history is up to date · all ' + checked + ' official feeds checked';
+  } catch (error) {
+    if (notice) notice.textContent = 'Drawing history refresh failed · ' + error.message;
+  } finally {
+    button.disabled = false;
+    button.textContent = 'Refresh drawing history';
+  }
 }
 
 async function loadLatestDrawsFromLocalApi() {
@@ -508,6 +553,7 @@ function startDataPolling() {
     if (!document.hidden) checkForNewData();
   });
 }
+document.getElementById('batchmateRefreshHistory')?.addEventListener('click', refreshBatchmateDrawingHistory);
 load().then(async()=>{ await loadLatestDrawsFromLocalApi(); startDataPolling(); }).catch(e=>{document.getElementById('status').textContent='Ticket analysis data is not available'; console.error(e); const notice=document.getElementById('refreshNotice'); if(notice) notice.textContent='Analysis data is not available';});
 </script>
 </body>
