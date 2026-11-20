@@ -55,6 +55,8 @@ The first report is expected to reveal how many rows are present in the unified 
 
 - `GET /health`
 - `GET /api/status`
+- `GET /api/migration/source-files` (Bearer token required; read-only migration export)
+- `GET /api/migration/ingestion-runs?limit=...&before=...` (Bearer token required; read-only migration export)
 - `GET /api/turso/health`
 - `GET /api/session-draws/summary`
 - `GET /api/session-draws?game=...&session=...`
