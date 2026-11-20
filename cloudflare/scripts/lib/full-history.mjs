@@ -105,7 +105,7 @@ export function normalizeSourceFile(row, source) {
   const r2Key = String(row.r2_key ?? "");
 
   if (filename !== source.filename) throw new Error(`Unexpected source metadata file: ${filename}.`);
-  if (!/^https:\\/\\//i.test(sourceUrl)) throw new Error(`Invalid source URL for ${filename}.`);
+  if (!sourceUrl.toLowerCase().startsWith("https://")) throw new Error(`Invalid source URL for ${filename}.`);
   if (!SHA256_PATTERN.test(sha256)) throw new Error(`Invalid source hash for ${filename}.`);
   if (!Number.isSafeInteger(bytes) || bytes <= 0) throw new Error(`Invalid byte size for ${filename}.`);
   if (!Number.isSafeInteger(rowCount) || rowCount <= 0) throw new Error(`Invalid CSV row count for ${filename}.`);
