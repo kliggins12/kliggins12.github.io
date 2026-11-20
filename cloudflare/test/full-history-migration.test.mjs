@@ -63,3 +63,10 @@ test("rejects invalid numbers payloads", () => {
     /non-negative integers/
   );
 });
+
+test("rejects a draw with the wrong number count for its game", () => {
+  assert.throws(
+    () => normalizeDrawRow({ ...validRow, numbers_json: "[2,4]" }, source),
+    /expected count/
+  );
+});
