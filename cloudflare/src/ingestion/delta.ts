@@ -42,3 +42,8 @@ export function selectChangedDraws(
     return false;
   });
 }
+
+/** A byte-identical source file is a no-op and must not start an ingest run. */
+export function isSourceHashUnchanged(previousHash: string | null | undefined, currentHash: string): boolean {
+  return previousHash === currentHash;
+}
