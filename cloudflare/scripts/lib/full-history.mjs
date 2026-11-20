@@ -90,3 +90,67 @@ export function normalizeDrawRow(row, source) {
     imported_at: importedAt
   };
 }
+
+
+export function normalizeSourceFile(row, source) {
+  if (!row || typeof row !== "object") throw new Error("Source metadata row is not an object.");
+  const filename = String(row.filename ?? "");
+  const sourceUrl = String(row.source_url ?? "");
+  const sha256 = String(row.sha256 ?? "").toLowerCase();
+  const bytes = Number(row.bytes);
+  const rowCount = Number(row.row_count);
+  const fetchedAt = String(row.fetched_at ?? "");
+  const lastModified = row.last_modified == null ? null : String(row.last_modified);
+  const etag = row.etag == null ? null : String(row.etag);
+  const r2Key = String(row.r2_key ?? "");
+
+  if (filename !== source.filename) throw new Error(`Unexpected source metadata file: ${filename}.`);
+  if (!/^https:\\/\\//i.test(sourceUrl)) throw new Error(`Invalid source URL for ${filename}.`);
+  if (!SHA256_PATTERN.test(sha256)) throw new Error(`Invalid source hash for ${filename}.`);
+  if (!Number.isSafeInteger(bytes) || bytes <= 0) throw new Error(`Invalid byte size for ${filename}.`);
+  if (!Number.isSafeInteger(rowCount) || rowCount <= 0) throw new Error(`Invalid CSV row count for ${filename}.`);
+  if (!fetchedAt || !Number.isFinite(Date.parse(fetchedAt))) throw new Error(`Invalid fetch timestamp for ${filename}.`);
+  if (!r2Key.startsWith(`sources/${filename}/`) || !r2Key.endsWith(".csv")) {
+    throw new Error(`Invalid R2 archive key for ${filename}.`);
+  }
+
+  return {
+    filename,
+    source_url: sourceUrl,
+    sha256,
+    bytes,
+    row_count: rowCount,
+    fetched_at: fetchedAt,
+    last_modified: lastModified,
+    etag,
+    r2_key: r2Key
+  };
+}
+
+export function normalizeIngestionRun(row) {
+  if (!row || typeof row !== "object") throw new Error("Ingestion run row is not an object.");
+  const id = Number(row.id);
+  const startedAt = String(row.started_at ?? "");
+  const finishedAt = row.finished_at == null ? null : String(row.finished_at);
+  const status = String(row.status ?? "");
+  const filesExpected = Number(row.files_expected);
+  const filesUpdated = Number(row.files_updated);
+  const error = row.error == null ? null : String(row.error);
+
+  if (!Number.isSafeInteger(id) || id <= 0) throw new Error("Invalid ingestion run ID.");
+  if (!startedAt || !Number.isFinite(Date.parse(startedAt))) throw new Error(`Invalid start timestamp for ingestion run ${id}.`);
+  if (finishedAt !== null && !Number.isFinite(Date.parse(finishedAt))) throw new Error(`Invalid finish timestamp for ingestion run ${id}.`);
+  if (!["running", "success", "partial", "failed"].includes(status)) throw new Error(`Invalid status for ingestion run ${id}.`);
+  if (!Number.isSafeInteger(filesExpected) || filesExpected < 0) throw new Error(`Invalid expected-file count for ingestion run ${id}.`);
+  if (!Number.isSafeInteger(filesUpdated) || filesUpdated < 0) throw new Error(`Invalid updated-file count for ingestion run ${id}.`);
+
+  return {
+    id,
+    started_at: startedAt,
+    finished_at: finishedAt,
+    status,
+    files_expected: filesExpected,
+    files_updated: filesUpdated,
+    error
+  };
+}
