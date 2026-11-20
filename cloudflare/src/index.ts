@@ -578,7 +578,7 @@ export default {
       if (!allowedGames.includes(game) || !allowedSessions.includes(session)) {
         return json({ error: "Supply a supported game and session." }, 400);
       }
-      if (after && !/^\\d{4}-\\d{2}-\\d{2}$/.test(after)) {
+      if (after && !/^\d{4}-\d{2}-\d{2}$/.test(after)) {
         return json({ error: "after must be YYYY-MM-DD." }, 400);
       }
       const limit = Math.min(1000, Math.max(1, Number(url.searchParams.get("limit") || 500)));
