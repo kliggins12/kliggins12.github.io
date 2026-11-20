@@ -275,10 +275,10 @@ async function ingest(env: Env): Promise<{
       });
       if (!response.ok) throw new Error(`HTTP ${response.status}`);
       const text = await response.text();
-      if (!text.trim() || /^\\s*<(?:!doctype\\s+html|html)/i.test(text)) {
+      if (!text.trim() || /^\s*<(?:!doctype\\s+html|html)/i.test(text)) {
         throw new Error("Empty response or HTML returned instead of CSV");
       }
-      if (!text.includes("\\n") || !text.includes(",")) throw new Error("Response does not look like CSV");
+      if (!text.includes("\n") || !text.includes(",")) throw new Error("Response does not look like CSV");
 
       const bytes = new TextEncoder().encode(text);
       const hash = await sha256Hex(bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength) as ArrayBuffer);
@@ -350,7 +350,7 @@ async function ingest(env: Env): Promise<{
   const status = errors.length === 0 ? "success" : updated + unchanged > 0 ? "partial" : "failed";
   await env.DB.prepare(
     "UPDATE ingestion_runs SET finished_at=?,status=?,files_updated=?,error=? WHERE id=?"
-  ).bind(new Date().toISOString(), status, updated, errors.join("\\n") || null, runId).run();
+  ).bind(new Date().toISOString(), status, updated, errors.join("\n") || null, runId).run();
 
   if (errors.length) throw new Error(`Ingestion ${status}: ${errors.join("; ")}`);
   return { updated, unchanged, checked, skipped: false, errors };
