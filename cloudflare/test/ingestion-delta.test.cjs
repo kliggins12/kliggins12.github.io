@@ -5,7 +5,7 @@ const path = require("node:path");
 const buildDir = process.env.INGESTION_BUILD_DIR;
 if (!buildDir) throw new Error("INGESTION_BUILD_DIR is required");
 
-const { selectChangedDraws } = require(
+const { isSourceHashUnchanged, selectChangedDraws } = require(
   path.join(buildDir, "ingestion", "delta.js")
 );
 
@@ -55,4 +55,10 @@ test("Turso comparison ignores archive hash changes when draw values match", () 
     [{ draw_date: "2026-11-18", numbers_json: "[1,2,3]" }]
   );
   assert.deepEqual(changed, []);
+});
+
+test("byte-identical CSV hash is a strict no-op", () => {
+  assert.equal(isSourceHashUnchanged("abc123", "abc123"), true);
+  assert.equal(isSourceHashUnchanged("abc123", "def456"), false);
+  assert.equal(isSourceHashUnchanged(undefined, "def456"), false);
 });
