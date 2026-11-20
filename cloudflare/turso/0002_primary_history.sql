@@ -52,6 +52,10 @@ CREATE TABLE IF NOT EXISTS migration_runs (
   source_count INTEGER NOT NULL,
   draws_expected INTEGER NOT NULL DEFAULT 0,
   draws_verified INTEGER NOT NULL DEFAULT 0,
+  source_files_expected INTEGER NOT NULL DEFAULT 0,
+  source_files_verified INTEGER NOT NULL DEFAULT 0,
+  ingestion_runs_expected INTEGER NOT NULL DEFAULT 0,
+  ingestion_runs_verified INTEGER NOT NULL DEFAULT 0,
   error TEXT
 );
 
