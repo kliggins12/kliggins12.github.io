@@ -1,6 +1,6 @@
 # Turso primary database / Cloudflare standby architecture
 
-**Status:** Approved target architecture; implementation and cutover are not yet authorized  
+**Status:** Approved target architecture; implementation in progress; production cutover not authorized  
 **Prepared:** 2026-11-20  
 **Scope:** Batchmate, NumberLab, drawing history, ingestion metadata, analysis notes, and board/Markov data
 
@@ -138,10 +138,10 @@ Required controls:
 5. Refactor the Worker data-access layer so Turso is the only normal application database. This implementation has not yet changed the production Worker read/write paths.
 6. Migrate the static Batchmate/NumberLab frontend contracts to the Worker API or a generated, versioned response cache whose source is Turso; do not point the frontend directly at database credentials.
 7. Shadow-test every frontend data view against the existing JSON output and current D1 results.
-6. Implement and test the service-mode state machine, user-facing banner, cache behavior, quota detection, and read-only restrictions.
-7. Establish Turso-to-D1 standby replication and prove the D1 mirror is eligible before any production failover test.
-8. Run read-only shadow comparisons between old D1 results and Turso results for every API route and game.
-9. Obtain explicit approval before changing production routing, enabling failover, unpausing ingestion, enabling Cron, or retiring any existing data store.
+8. Implement and test the service-mode state machine, user-facing banner, cache behavior, quota detection, and read-only restrictions.
+9. Establish Turso-to-D1 standby replication and prove the D1 mirror is eligible before any production failover test.
+10. Run read-only shadow comparisons between old D1 results and Turso results for every API route and game.
+11. Obtain explicit approval before changing production routing, enabling failover, unpausing ingestion, enabling Cron, or retiring any existing data store.
 
 ## 9. Release gates
 
