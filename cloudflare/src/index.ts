@@ -132,8 +132,12 @@ function parseSourceDraws(csv: string, source: Source): ParsedDraw[] {
   return parsed;
 }
 
-async function reindexSource(env: Env, source: Source): Promise<{ filename: string; imported: number }> {
-  const record = await env.DB.prepare("SELECT r2_key,sha256 FROM source_files WHERE filename=?")
+async function reindexSource(
+  env: Env,
+  source: Source,
+  archived?: { r2_key: string; sha256: string }
+): Promise<{ filename: string; imported: number; tursoImported: number | null }> {
+  const record = archived ?? await env.DB.prepare("SELECT r2_key,sha256 FROM source_files WHERE filename=?")
     .bind(source.filename).first<{ r2_key: string; sha256: string }>();
   if (!record) throw new Error(`No archived source found for ${source.filename}`);
   const object = await env.ARCHIVE.get(record.r2_key);
@@ -155,7 +159,40 @@ async function reindexSource(env: Env, source: Source): Promise<{ filename: stri
   for (let i = 0; i < statements.length; i += 50) {
     await env.DB.batch(statements.slice(i, i + 50));
   }
-  return { filename: source.filename, imported: draws.length };
+
+  // Keep the 12 sessioned histories synchronized in Turso. D1 remains the
+  // ingestion store for all 17 sources; only Pick 3, Daily 4, and All or Nothing
+  // are mirrored into the session-history database.
+  let tursoImported: number | null = null;
+  if (["Pick 3", "Daily 4", "All or Nothing"].includes(source.game)) {
+    const turso = getTursoClient(env);
+    const tursoStatements = draws.map((draw) => ({
+      sql: `
+        INSERT INTO session_draws(game,session,draw_date,numbers,source_file,source_hash,imported_at)
+        VALUES(?,?,?,?,?,?,?)
+        ON CONFLICT(game,session,draw_date) DO UPDATE SET
+          numbers=excluded.numbers,
+          source_file=excluded.source_file,
+          source_hash=excluded.source_hash,
+          imported_at=excluded.imported_at
+      `,
+      args: [
+        source.game,
+        source.session,
+        draw.drawDate,
+        JSON.stringify(draw.numbers),
+        source.filename,
+        record.sha256,
+        importedAt
+      ]
+    }));
+    for (let i = 0; i < tursoStatements.length; i += 50) {
+      await turso.batch(tursoStatements.slice(i, i + 50), "write");
+    }
+    tursoImported = draws.length;
+  }
+
+  return { filename: source.filename, imported: draws.length, tursoImported };
 }
 
 async function ingest(env: Env): Promise<{ updated: number; unchanged: number; errors: string[] }> {
@@ -190,6 +227,11 @@ async function ingest(env: Env): Promise<{ updated: number; unchanged: number; e
         httpMetadata: { contentType: "text/csv; charset=utf-8" },
         customMetadata: { game: source.game, session: source.session, sha256: hash }
       });
+      // Parse and persist the changed source before advancing its current
+      // metadata pointer. If parsing or Turso synchronization fails, the next
+      // scheduled run retries this same source instead of treating it as done.
+      await reindexSource(env, source, { r2_key: key, sha256: hash });
+
       const now = new Date().toISOString();
       await env.DB.prepare(`
         INSERT INTO source_files(filename,source_url,sha256,bytes,row_count,fetched_at,last_modified,etag,r2_key)
