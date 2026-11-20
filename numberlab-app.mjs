@@ -1,4 +1,4 @@
-const DATA_API = "https://batchmate-data.kamika-us.workers.dev";
+const DATA_API = "https://kamika.tail085272.ts.net";
 const EXPECTED_STREAMS = [
   "All or Nothing|morning", "All or Nothing|day", "All or Nothing|evening", "All or Nothing|night",
   "Pick 3|morning", "Pick 3|day", "Pick 3|evening", "Pick 3|night",
@@ -143,7 +143,7 @@ function updateStorageNotice(mode, message) {
   const label = document.getElementById("storageNoticeStatus");
   const title = document.getElementById("storageNoticeTitle");
   const body = document.getElementById("storageNoticeText");
-  if (label) label.textContent = mode === "primary" ? "Turso primary" : mode === "legacy" ? "Limited history" : "Service unavailable";
+  if (label) label.textContent = mode === "primary" ? "Local SQLite" : mode === "legacy" ? "Limited history" : "Service unavailable";
   if (title) title.textContent = mode === "primary"
     ? "Full drawing history is available."
     : mode === "legacy"
@@ -190,7 +190,7 @@ async function loadSummary() {
       state.streams = primary.streams;
       state.historyRows = [];
       state.cursor = null;
-      updateStorageNotice("primary", "The 17 verified game feeds are being read from the Turso primary database. Cloudflare's read-only standby has not been activated yet; no backup failover is being claimed.");
+      updateStorageNotice("primary", "The 17 verified game feeds are being read from the local SQLite database over your private Tailscale network. Only devices connected to your tailnet can access this database.");
       renderStreamSummary(primary);
       return;
     }
@@ -212,7 +212,7 @@ async function loadSummary() {
   } catch (error) {
     state.mode = null;
     state.streams = [];
-    updateStorageNotice("unavailable", "No verified history could be loaded. The page is not substituting unverified or guessed drawing data.");
+    updateStorageNotice("unavailable", "NumberLab could not reach the local database. Connect this device to your private Tailscale network, then reload the page.");
     if (status) status.textContent = "History unavailable";
     if (out) out.textContent = error.message;
   }
