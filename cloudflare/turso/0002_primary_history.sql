@@ -1,0 +1,68 @@
+-- Unified primary history for all 17 Batchmate source files.
+-- Existing session_draws remains temporarily for compatibility until API cutover.
+
+CREATE TABLE IF NOT EXISTS lottery_draws (
+  source_filename TEXT NOT NULL,
+  game TEXT NOT NULL,
+  session TEXT NOT NULL,
+  draw_date TEXT NOT NULL,
+  numbers_json TEXT NOT NULL,
+  source_sha256 TEXT NOT NULL,
+  imported_at TEXT NOT NULL,
+  PRIMARY KEY (source_filename, draw_date)
+);
+
+CREATE INDEX IF NOT EXISTS idx_lottery_draws_game_session_date
+  ON lottery_draws(game, session, draw_date DESC);
+
+CREATE INDEX IF NOT EXISTS idx_lottery_draws_game_date
+  ON lottery_draws(game, draw_date DESC);
+
+CREATE TABLE IF NOT EXISTS source_files (
+  filename TEXT PRIMARY KEY,
+  source_url TEXT NOT NULL,
+  sha256 TEXT NOT NULL,
+  bytes INTEGER NOT NULL,
+  row_count INTEGER NOT NULL,
+  fetched_at TEXT NOT NULL,
+  last_modified TEXT,
+  etag TEXT,
+  r2_key TEXT NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS ingestion_runs (
+  id INTEGER PRIMARY KEY,
+  started_at TEXT NOT NULL,
+  finished_at TEXT,
+  status TEXT NOT NULL CHECK (status IN ('running','success','partial','failed')),
+  files_expected INTEGER NOT NULL,
+  files_updated INTEGER NOT NULL DEFAULT 0,
+  error TEXT
+);
+
+CREATE INDEX IF NOT EXISTS idx_turso_ingestion_runs_started
+  ON ingestion_runs(started_at DESC);
+
+CREATE TABLE IF NOT EXISTS migration_runs (
+  run_id TEXT PRIMARY KEY,
+  migration_key TEXT NOT NULL,
+  started_at TEXT NOT NULL,
+  finished_at TEXT,
+  status TEXT NOT NULL CHECK (status IN ('running','success','failed')),
+  source_count INTEGER NOT NULL,
+  draws_expected INTEGER NOT NULL DEFAULT 0,
+  draws_verified INTEGER NOT NULL DEFAULT 0,
+  error TEXT
+);
+
+CREATE TABLE IF NOT EXISTS migration_source_progress (
+  migration_key TEXT NOT NULL,
+  source_filename TEXT NOT NULL,
+  status TEXT NOT NULL CHECK (status IN ('pending','complete','failed')),
+  row_count INTEGER NOT NULL DEFAULT 0,
+  first_draw_date TEXT,
+  latest_draw_date TEXT,
+  source_fingerprint TEXT NOT NULL,
+  verified_at TEXT,
+  PRIMARY KEY (migration_key, source_filename)
+);
