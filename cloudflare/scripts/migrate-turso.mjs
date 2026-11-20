@@ -11,6 +11,7 @@ const migrationFiles = [
   new URL("../turso/0002_primary_history.sql", import.meta.url)
 ];
 const expected = [
+  "analysis_artifacts",
   "board_checkpoints",
   "board_events",
   "ingestion_runs",
