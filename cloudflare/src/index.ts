@@ -186,8 +186,8 @@ async function reindexSource(
         importedAt
       ]
     }));
-    for (let i = 0; i < tursoStatements.length; i += 50) {
-      await turso.batch(tursoStatements.slice(i, i + 50), "write");
+    for (let i = 0; i < tursoStatements.length; i += 500) {
+      await turso.batch(tursoStatements.slice(i, i + 500), "write");
     }
     tursoImported = draws.length;
   }
