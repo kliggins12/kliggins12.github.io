@@ -209,24 +209,70 @@ header h1{font-size:clamp(28px,3.2vw,34px)}
   </div>
 </main>
 <script>
-let DATA = null, TIGHT = null, latestOfficialDraws = [], sortKey = 'best_streak', sortDir = -1;
+const DATA_API = 'https://batchmate-data.kamika-us.workers.dev';
+let DATA = null, TIGHT = null, DATA_SOURCE = 'legacy', latestOfficialDraws = [], sortKey = 'best_streak', sortDir = -1;
 let tightKey = 'best', tightDir = -1;
+
+async function readJson(url) {
+  const response = await fetch(url, {cache:'no-store', headers:{accept:'application/json'}});
+  if (!response.ok) throw new Error('HTTP ' + response.status + ' for ' + url);
+  return await response.json();
+}
+
+async function readLegacyArtifact(localPath, remotePath) {
+  try { return await readJson(localPath + '?ts=' + Date.now()); }
+  catch (localError) { return await readJson(remotePath + '?ts=' + Date.now()); }
+}
 
 async function load() {
   document.getElementById('status').textContent = 'Loading drawing results…';
   if (window.BATCHMATE_DATA) {
     DATA = window.BATCHMATE_DATA;
+    DATA_SOURCE = 'injected';
   } else {
-    const r = await fetch('batchmate_data.json?ts=' + Date.now(), {cache:'no-store'});
-    DATA = await r.json();
+    try {
+      const payload = await readJson(DATA_API + '/api/primary/analysis');
+      if (!payload || payload.ok !== true || !payload.batchmate_data || !payload.tight_tickets ||
+          !Array.isArray(payload.batchmate_data.games) || !Array.isArray(payload.tight_tickets.tickets)) {
+        throw new Error('Turso analysis snapshots are incomplete');
+      }
+      DATA = payload.batchmate_data;
+      TIGHT = payload.tight_tickets;
+      DATA_SOURCE = 'turso-primary';
+    } catch (primaryError) {
+      DATA = await readLegacyArtifact(
+        'batchmate_data.json',
+        'https://raw.githubusercontent.com/kliggins12/batchmate/master/batchmate_data.json'
+      );
+      DATA_SOURCE = 'legacy-published-snapshot';
+    }
   }
-  try {
-    const tr = await fetch('tight_tickets.json?ts=' + Date.now(), {cache:'no-store'});
-    TIGHT = await tr.json();
-  } catch (e) { TIGHT = { tickets: [] }; }
+
+  if (!TIGHT) {
+    try {
+      TIGHT = await readLegacyArtifact(
+        'tight_tickets.json',
+        'https://raw.githubusercontent.com/kliggins12/batchmate/master/tight_tickets.json'
+      );
+    } catch (error) {
+      if (DATA_SOURCE === 'turso-primary') throw error;
+      TIGHT = { tickets: [], latest_draws: [] };
+    }
+  }
+  if (!DATA || !Array.isArray(DATA.games) || !DATA.games.length) {
+    throw new Error('Batchmate analysis data is missing its game summaries.');
+  }
+  if (!TIGHT || !Array.isArray(TIGHT.tickets)) {
+    throw new Error('Batchmate tight-ticket data is missing its ticket list.');
+  }
+
   document.getElementById('genmeta').textContent = 'Updated ' + DATA.generated;
   const notice = document.getElementById('refreshNotice');
-  if (notice) notice.textContent = 'Updated automatically · latest results from ' + DATA.generated;
+  if (notice) {
+    const sourceLabel = DATA_SOURCE === 'turso-primary' ? 'Turso primary' :
+      DATA_SOURCE === 'injected' ? 'Embedded data' : 'Published analysis snapshot';
+    notice.textContent = sourceLabel + ' · generated ' + DATA.generated;
+  }
   const sel = document.getElementById('gameSel');
   sel.innerHTML = DATA.games.map((g,i)=>`<option value="${i}">${g.name} — ${g.pick} (${g.n_tickets.toLocaleString()} combos, ${g.n_draws.toLocaleString()} draws)</option>`).join('');
   const games = [...new Set(TIGHT.tickets.map(t=>t.game))];
@@ -246,22 +292,26 @@ async function load() {
   renderReadj();
 }
 
-
 async function loadLatestDrawsFromCloudflare() {
   try {
-    const response = await fetch('https://batchmate-data.kamika-us.workers.dev/api/draws/latest', {cache:'no-store'});
-    if (!response.ok) throw new Error('HTTP ' + response.status);
-    const payload = await response.json();
-    if (!Array.isArray(payload.draws) || payload.count !== 17) throw new Error('Expected 17 latest source records; received ' + payload.count);
-    const groups = {};
-    payload.draws.forEach(d => {
-      (groups[d.game] = groups[d.game] || []).push(d);
-    });
+    let payload;
+    try {
+      payload = await readJson(DATA_API + '/api/primary/draws/latest');
+      if (!payload.ok || !Array.isArray(payload.draws) || payload.count !== 17) {
+        throw new Error('Turso latest-drawing feed is incomplete');
+      }
+    } catch (primaryError) {
+      payload = await readJson(DATA_API + '/api/draws/latest');
+      if (!Array.isArray(payload.draws) || payload.count !== 17) {
+        throw new Error('Expected 17 latest source records; received ' + payload.count);
+      }
+    }
     latestOfficialDraws = payload.draws.map(d=>({...d, numbers:d.numbers_json}));
     renderHot();
     const notice = document.getElementById('refreshNotice');
-    if (notice) const updatedAt = new Date().toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'short' });
-    if (notice) notice.textContent = 'Drawing history updated · ' + updatedAt;
+    const updatedAt = new Date().toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'short' });
+    if (notice) notice.textContent = 'Drawing history updated · ' + updatedAt +
+      (payload.storage === 'turso-primary' ? ' · Turso primary' : ' · connected data service');
   } catch (error) {
     console.error('Batchmate latest draw API failed:', error);
   }
@@ -417,9 +467,18 @@ async function checkForNewData() {
   if (document.hidden || refreshCheckInFlight || refreshedBuild === (DATA && DATA.generated)) return;
   refreshCheckInFlight = true;
   try {
-    const response = await fetch('batchmate_data.json?check=' + Date.now(), {cache:'no-store'});
-    if (!response.ok) throw new Error('HTTP ' + response.status);
-    const latest = await response.json();
+    let latest;
+    if (DATA_SOURCE === 'turso-primary') {
+      const payload = await readJson(DATA_API + '/api/primary/analysis');
+      if (!payload || payload.ok !== true || !payload.batchmate_data) throw new Error('Turso analysis snapshot is not ready');
+      latest = payload.batchmate_data;
+    } else {
+      try {
+        latest = await readJson('batchmate_data.json?check=' + Date.now());
+      } catch (error) {
+        latest = await readJson('https://raw.githubusercontent.com/kliggins12/batchmate/master/batchmate_data.json?check=' + Date.now());
+      }
+    }
     if (latest.generated && DATA && latest.generated !== DATA.generated) {
       clearInterval(refreshTimer);
       sessionStorage.setItem('batchmate-refreshed-build', latest.generated);
@@ -450,8 +509,7 @@ function startDataPolling() {
     if (!document.hidden) checkForNewData();
   });
 }
-loadLatestDrawsFromCloudflare();
-load().then(startDataPolling).catch(e=>{document.getElementById('status').textContent='Ticket analysis data is not published yet';console.error(e)});
+load().then(async()=>{ await loadLatestDrawsFromCloudflare(); startDataPolling(); }).catch(e=>{document.getElementById('status').textContent='Ticket analysis data is not available'; console.error(e); const notice=document.getElementById('refreshNotice'); if(notice) notice.textContent='Analysis data is not available';});
 </script>
 </body>
 </html>
