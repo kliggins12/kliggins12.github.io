@@ -376,6 +376,151 @@ export default {
       }
     }
 
+    // Unified all-game read API. These routes read only from Turso's
+    // lottery_draws table; they remain unused by the public frontend until
+    // the full-history migration has been verified and cutover is approved.
+    if (url.pathname === "/api/primary/draws/summary") {
+      try {
+        const db = getTursoClient(env);
+        const result = await db.execute(`
+          SELECT game, session, COUNT(*) AS draw_count,
+                 MIN(draw_date) AS first_draw_date,
+                 MAX(draw_date) AS last_draw_date
+          FROM lottery_draws
+          GROUP BY game, session
+          ORDER BY game, session
+        `);
+        const streams = result.rows.map((row) => ({
+          game: String(row.game),
+          session: String(row.session),
+          draw_count: Number(row.draw_count),
+          first_draw_date: String(row.first_draw_date),
+          last_draw_date: String(row.last_draw_date)
+        }));
+        return json({
+          ok: true,
+          storage: "turso-primary",
+          streamCount: streams.length,
+          drawCount: streams.reduce((sum, stream) => sum + stream.draw_count, 0),
+          streams
+        });
+      } catch (error) {
+        return json({
+          ok: false,
+          storage: "turso-primary",
+          error: error instanceof Error ? error.message : "Primary history summary unavailable"
+        }, 503);
+      }
+    }
+
+    if (url.pathname === "/api/primary/draws/latest") {
+      try {
+        const db = getTursoClient(env);
+        const result = await db.execute(`
+          SELECT d.source_filename, d.game, d.session, d.draw_date, d.numbers_json
+          FROM lottery_draws d
+          INNER JOIN (
+            SELECT source_filename, MAX(draw_date) AS max_date
+            FROM lottery_draws
+            GROUP BY source_filename
+          ) latest
+            ON latest.source_filename=d.source_filename
+           AND latest.max_date=d.draw_date
+          ORDER BY d.game, d.session, d.draw_date DESC
+        `);
+        const draws = result.rows.map((row) => ({
+          source_filename: String(row.source_filename),
+          game: String(row.game),
+          session: String(row.session),
+          draw_date: String(row.draw_date),
+          numbers_json: String(row.numbers_json)
+        }));
+        return json({ ok: true, storage: "turso-primary", count: draws.length, draws });
+      } catch (error) {
+        return json({
+          ok: false,
+          storage: "turso-primary",
+          error: error instanceof Error ? error.message : "Primary latest drawings unavailable"
+        }, 503);
+      }
+    }
+
+    if (url.pathname === "/api/primary/draws") {
+      const game = url.searchParams.get("game");
+      const session = url.searchParams.get("session");
+      const sourceFilename = url.searchParams.get("source");
+      const before = url.searchParams.get("before");
+      const allowedGames = new Set(TX.map((source) => source.game));
+      const validSources = new Map(TX.map((source) => [
+        source.filename,
+        { game: source.game, session: source.session }
+      ]));
+
+      if (game && !allowedGames.has(game)) {
+        return json({ error: "Unsupported game." }, 400);
+      }
+      if (sourceFilename && !validSources.has(sourceFilename)) {
+        return json({ error: "Unsupported source file." }, 400);
+      }
+      if (session && !TX.some((source) => source.session === session && (!game || source.game === game))) {
+        return json({ error: "Unsupported session for this game." }, 400);
+      }
+      if (sourceFilename) {
+        const source = validSources.get(sourceFilename)!;
+        if ((game && source.game !== game) || (session && source.session !== session)) {
+          return json({ error: "Source file does not match the requested game/session." }, 400);
+        }
+      }
+      if (before) {
+        const validDate = /^\\d{4}-\\d{2}-\\d{2}$/.test(before) &&
+          new Date(before + "T00:00:00.000Z").toISOString().slice(0, 10) === before;
+        if (!validDate) return json({ error: "before must be a real YYYY-MM-DD date." }, 400);
+      }
+
+      const parsedLimit = Number(url.searchParams.get("limit") || 100);
+      const limit = Number.isFinite(parsedLimit) ? Math.min(500, Math.max(1, Math.trunc(parsedLimit))) : 100;
+      const clauses: string[] = [];
+      const args: (string | number)[] = [];
+      if (game) { clauses.push("game=?"); args.push(game); }
+      if (session) { clauses.push("session=?"); args.push(session); }
+      if (sourceFilename) { clauses.push("source_filename=?"); args.push(sourceFilename); }
+      if (before) { clauses.push("draw_date<?"); args.push(before); }
+
+      try {
+        const db = getTursoClient(env);
+        const result = await db.execute({
+          sql: `SELECT source_filename,game,session,draw_date,numbers_json,source_sha256,imported_at
+                FROM lottery_draws
+                ${clauses.length ? "WHERE " + clauses.join(" AND ") : ""}
+                ORDER BY draw_date DESC,source_filename
+                LIMIT ?`,
+          args: [...args, limit]
+        });
+        const draws = result.rows.map((row) => ({
+          source_filename: String(row.source_filename),
+          game: String(row.game),
+          session: String(row.session),
+          draw_date: String(row.draw_date),
+          numbers_json: String(row.numbers_json),
+          source_sha256: String(row.source_sha256),
+          imported_at: String(row.imported_at)
+        }));
+        return json({
+          ok: true,
+          storage: "turso-primary",
+          count: draws.length,
+          draws,
+          nextBefore: draws.length === limit ? draws[draws.length - 1].draw_date : null
+        });
+      } catch (error) {
+        return json({
+          ok: false,
+          storage: "turso-primary",
+          error: error instanceof Error ? error.message : "Primary drawing history unavailable"
+        }, 503);
+      }
+    }
+
     if (url.pathname === "/api/session-draws/summary") {
       try {
         const db = getTursoClient(env);
