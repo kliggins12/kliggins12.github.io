@@ -17,7 +17,7 @@
 
 The current Worker is not yet Turso-primary. The current code uses D1 for source-file metadata, ingestion runs, and the indexed draw history. It also mirrors only the 12 Pick 3, Daily 4, and All or Nothing session streams into Turso. The other game histories and D1 operational metadata are not yet represented by the current Turso session-history schema.
 
-The public Batchmate page currently reads the static batchmate_data.json and tight_tickets.json files; it is not yet consuming the Worker/Turso API as its live data source. The Worker also exposes D1 and Turso endpoints, but that does not by itself make the website Turso-primary. The frontend data contract and API integration must be migrated and parity-tested before cutover.
+The public Batchmate homepage still reads the static batchmate_data.json and tight_tickets.json files; its generated-combination contract has not yet been ported to the Worker/Turso API. The NumberLab client now has a compatibility-aware reader: it selects the all-game Turso API only when all 17 expected feeds are present and non-empty, otherwise it uses the older 12-stream session history and labels it as limited. It renders a drawing journal, consecutive-draw comparisons, observed frequency summaries, and the recent Pick 3 sequence. These are descriptive views, not a Markov forecasting model. The NumberLab update is on the implementation branch and is not deployed. The Worker also exposes D1 and Turso endpoints, but that does not by itself make the website Turso-primary. Batchmate's generated-combination data contract and all persistent analysis/model state still require migration and parity testing.
 
 The temporary preview run is separate. It loaded 100 recent draws in each of those 12 streams into temp_preview_* tables. It did not populate the canonical session_draws table and is not a full-history migration.
 
@@ -136,7 +136,7 @@ Required controls:
 3. Run the new read-only full-history report. It compares all 17 D1-backed source feeds with unified Turso records using row counts and SHA-256 fingerprints. The separate import mode requires an exact confirmation phrase and uses idempotent batches of 100.
 4. After the drawing import, verify exact key coverage, row payload hashes, source metadata, complete ingestion metadata, and model identity. Drawing fingerprint verification is implemented; metadata/model transfer is still outstanding.
 5. Refactor the Worker data-access layer so Turso is the only normal application database. This implementation has not yet changed the production Worker read/write paths.
-6. Migrate the static Batchmate/NumberLab frontend contracts to the Worker API or a generated, versioned response cache whose source is Turso; do not point the frontend directly at database credentials.
+6. Complete the Batchmate generated-combination API contract and shadow parity checks. NumberLab's compatibility-aware reader is implemented, but the full 17-feed path remains gated on successful migration and verification. Do not point the frontend directly at database credentials.
 7. Shadow-test every frontend data view against the existing JSON output and current D1 results.
 8. Implement and test the service-mode state machine, user-facing banner, cache behavior, quota detection, and read-only restrictions.
 9. Establish Turso-to-D1 standby replication and prove the D1 mirror is eligible before any production failover test.
