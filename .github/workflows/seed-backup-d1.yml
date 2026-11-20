@@ -4,10 +4,10 @@ on:
   workflow_dispatch:
     inputs:
       max_draw_rows:
-        description: "Maximum drawing rows to copy in this run (keep below the daily 80% safety guard)"
+        description: "Maximum drawing rows to copy in this run (hard-capped at 5,000; durable daily write budget also applies)"
         required: true
         type: number
-        default: 60000
+        default: 5000
 
 permissions:
   contents: read
