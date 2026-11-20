@@ -1,18 +1,17 @@
 name: Validate Turso migration changes
 
 on:
-  push:
-    branches:
-      - implementation/turso-full-history
-    paths:
-      - "cloudflare/**"
-      - ".github/workflows/test-turso-migration.yml"
   pull_request:
     branches:
       - master
     paths:
       - "cloudflare/**"
       - ".github/workflows/test-turso-migration.yml"
+  workflow_dispatch:
+
+concurrency:
+  group: turso-migration-validation-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
 
 permissions:
   contents: read
