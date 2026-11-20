@@ -149,7 +149,8 @@ async function writeSource(db, source, rows) {
   return changedRows;
 }
 
-async function main() {\nconst db = createClient({ url: DATABASE_URL, authToken: AUTH_TOKEN });
+async function main() {
+  const db = createClient({ url: DATABASE_URL, authToken: AUTH_TOKEN });
 const runId = randomUUID();
 const startedAt = new Date().toISOString();
 const report = {
@@ -281,4 +282,6 @@ try {
 } finally {
   await db.close();
 }
-\n\nawait main();\n
+
+
+await main();
