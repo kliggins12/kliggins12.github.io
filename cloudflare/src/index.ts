@@ -8,6 +8,7 @@ interface Env {
   ARCHIVE: R2Bucket;
   API_TOKEN?: string;
   INGEST_PAUSED?: string;
+  DATA_MODE?: "legacy-d1" | "turso-primary";
 }
 
 type Source = { filename: string; url: string; game: string; session: string };
@@ -354,6 +355,268 @@ async function ingest(env: Env): Promise<{
 
   if (errors.length) throw new Error(`Ingestion ${status}: ${errors.join("; ")}`);
   return { updated, unchanged, checked, skipped: false, errors };
+}
+
+
+// Turso-primary source ingestion. This path writes canonical drawings,
+// source metadata, and operational history to Turso only. It does not write
+// to D1. Raw CSV versions remain in R2 for recovery and audit.
+async function reindexSourceToTurso(
+  env: Env,
+  source: Source,
+  archived: { r2_key: string; sha256: string },
+  csvText?: string
+): Promise<{ filename: string; parsed: number; imported: number; unchanged: number }> {
+  const objectText = csvText ?? await (async () => {
+    const object = await env.ARCHIVE.get(archived.r2_key);
+    if (!object) throw new Error(`Archived CSV is missing for ${source.filename}`);
+    return await object.text();
+  })();
+
+  const draws = parseSourceDraws(objectText, source);
+  if (draws.length === 0) {
+    throw new Error(`No valid drawing rows parsed from ${source.filename}; existing history was left unchanged.`);
+  }
+
+  const db = getTursoClient(env);
+  const existingResult = await db.execute({
+    sql: `SELECT draw_date,game,session,numbers_json
+          FROM lottery_draws WHERE source_filename=?`,
+    args: [source.filename]
+  });
+  const existing = existingResult.rows.map((row) => ({
+    draw_date: String(row.draw_date),
+    game: String(row.game),
+    session: String(row.session),
+    numbers_json: String(row.numbers_json)
+  }));
+  const changes = selectChangedDraws(
+    draws,
+    existing,
+    { game: source.game, session: source.session }
+  );
+  const importedAt = new Date().toISOString();
+  const insertSql = `INSERT INTO lottery_draws
+    (source_filename,game,session,draw_date,numbers_json,source_sha256,imported_at)
+    VALUES(?,?,?,?,?,?,?)
+    ON CONFLICT(source_filename,draw_date) DO UPDATE SET
+      game=excluded.game,
+      session=excluded.session,
+      numbers_json=excluded.numbers_json,
+      source_sha256=excluded.source_sha256,
+      imported_at=excluded.imported_at
+    WHERE lottery_draws.game IS NOT excluded.game
+       OR lottery_draws.session IS NOT excluded.session
+       OR lottery_draws.numbers_json IS NOT excluded.numbers_json
+       OR lottery_draws.source_sha256 IS NOT excluded.source_sha256
+       OR lottery_draws.imported_at IS NOT excluded.imported_at`;
+
+  for (let offset = 0; offset < changes.length; offset += 100) {
+    const batch = changes.slice(offset, offset + 100).map((draw) => ({
+      sql: insertSql,
+      args: [
+        source.filename,
+        source.game,
+        source.session,
+        draw.drawDate,
+        JSON.stringify(draw.numbers),
+        archived.sha256,
+        importedAt
+      ]
+    }));
+    await db.batch(batch, "write");
+  }
+
+  return {
+    filename: source.filename,
+    parsed: draws.length,
+    imported: changes.length,
+    unchanged: draws.length - changes.length
+  };
+}
+
+async function upsertTursoSourceMetadata(
+  env: Env,
+  source: Source,
+  bytes: number,
+  rows: number,
+  sha256: string,
+  r2Key: string,
+  lastModified: string | null,
+  etag: string | null
+): Promise<void> {
+  const db = getTursoClient(env);
+  const fetchedAt = new Date().toISOString();
+  await db.execute({
+    sql: `INSERT INTO source_files
+      (filename,source_url,sha256,bytes,row_count,fetched_at,last_modified,etag,r2_key)
+      VALUES(?,?,?,?,?,?,?,?,?)
+      ON CONFLICT(filename) DO UPDATE SET
+        source_url=excluded.source_url,
+        sha256=excluded.sha256,
+        bytes=excluded.bytes,
+        row_count=excluded.row_count,
+        fetched_at=excluded.fetched_at,
+        last_modified=excluded.last_modified,
+        etag=excluded.etag,
+        r2_key=excluded.r2_key
+      WHERE source_files.source_url IS NOT excluded.source_url
+         OR source_files.sha256 IS NOT excluded.sha256
+         OR source_files.bytes IS NOT excluded.bytes
+         OR source_files.row_count IS NOT excluded.row_count
+         OR source_files.fetched_at IS NOT excluded.fetched_at
+         OR source_files.last_modified IS NOT excluded.last_modified
+         OR source_files.etag IS NOT excluded.etag
+         OR source_files.r2_key IS NOT excluded.r2_key`,
+    args: [
+      source.filename,
+      source.url,
+      sha256,
+      bytes,
+      rows,
+      fetchedAt,
+      lastModified,
+      etag,
+      r2Key
+    ]
+  });
+}
+
+async function ingestToTurso(env: Env): Promise<{
+  updated: number;
+  unchanged: number;
+  checked: number;
+  skipped: boolean;
+  status: "success" | "partial" | "failed" | "skipped";
+  errors: string[];
+}> {
+  type Candidate = {
+    source: Source;
+    text: string;
+    bytes: Uint8Array;
+    hash: string;
+    lastModified: string | null;
+    etag: string | null;
+  };
+
+  const db = getTursoClient(env);
+  const priorResult = await db.execute("SELECT filename,sha256 FROM source_files");
+  const priorHashes = new Map(priorResult.rows.map((row) => [
+    String(row.filename),
+    String(row.sha256)
+  ]));
+
+  const candidates: Candidate[] = [];
+  const errors: string[] = [];
+  let unchanged = 0;
+  let checked = 0;
+
+  // Fetch and validate every source before creating the run record. A failed
+  // or identical source does not advance its source metadata pointer.
+  for (const source of TX) {
+    try {
+      const response = await fetch(source.url, {
+        headers: { "user-agent": "BatchmateDataCollector/1.0 (historical lottery data)" },
+        signal: AbortSignal.timeout(55000)
+      });
+      if (!response.ok) throw new Error(`HTTP ${response.status}`);
+      const text = await response.text();
+      if (!text.trim() || /^\s*<(?:!doctype\s+html|html)/i.test(text)) {
+        throw new Error("Empty response or HTML returned instead of CSV");
+      }
+      if (!text.includes("\n") || !text.includes(",")) {
+        throw new Error("Response does not look like CSV");
+      }
+
+      const bytes = new TextEncoder().encode(text);
+      const hash = await sha256Hex(bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength) as ArrayBuffer);
+      checked++;
+      if (isSourceHashUnchanged(priorHashes.get(source.filename), hash)) {
+        unchanged++;
+        continue;
+      }
+
+      // Parse once here so an invalid file cannot be archived as a new
+      // current version or create a partially valid drawing import.
+      const parsed = parseSourceDraws(text, source);
+      if (!parsed.length) throw new Error("No valid drawing rows parsed from CSV");
+
+      candidates.push({
+        source,
+        text,
+        bytes,
+        hash,
+        lastModified: response.headers.get("last-modified"),
+        etag: response.headers.get("etag")
+      });
+    } catch (error) {
+      errors.push(`${source.filename}: ${error instanceof Error ? error.message : String(error)}`);
+    }
+  }
+
+  if (candidates.length === 0 && errors.length === 0) {
+    console.log(`Turso source check complete: ${checked} checked, ${unchanged} unchanged; zero database writes.`);
+    return { updated: 0, unchanged, checked, skipped: true, status: "skipped", errors };
+  }
+
+  // Use an explicit integer key so the copied D1 run IDs can be preserved.
+  // The range stays within SQLite's signed 64-bit INTEGER and JS safe integer.
+  const startedAt = new Date().toISOString();
+  const runId = Date.now() * 1000 + Math.floor(Math.random() * 1000);
+  await db.execute({
+    sql: `INSERT INTO ingestion_runs
+      (id,started_at,status,files_expected,files_updated,error)
+      VALUES(?,?,?,?,0,?)`,
+    args: [runId, startedAt, "running", TX.length, errors.join("\n") || null]
+  });
+
+  let updated = 0;
+  for (const candidate of candidates) {
+    const { source, text, bytes, hash, lastModified, etag } = candidate;
+    try {
+      const key = `sources/${source.filename}/${hash}.csv`;
+      await env.ARCHIVE.put(key, bytes, {
+        httpMetadata: { contentType: "text/csv; charset=utf-8" },
+        customMetadata: { game: source.game, session: source.session, sha256: hash }
+      });
+
+      const result = await reindexSourceToTurso(
+        env,
+        source,
+        { r2_key: key, sha256: hash },
+        text
+      );
+      await upsertTursoSourceMetadata(
+        env,
+        source,
+        bytes.byteLength,
+        csvRowCount(text),
+        hash,
+        key,
+        lastModified,
+        etag
+      );
+      updated++;
+      console.log(`Turso imported ${source.filename}: ${result.imported} changed, ${result.unchanged} unchanged.`);
+    } catch (error) {
+      errors.push(`${source.filename}: ${error instanceof Error ? error.message : String(error)}`);
+    }
+  }
+
+  const status = errors.length === 0 ? "success" : updated > 0 ? "partial" : "failed";
+  await db.execute({
+    sql: "UPDATE ingestion_runs SET finished_at=?,status=?,files_updated=?,error=? WHERE id=?",
+    args: [new Date().toISOString(), status, updated, errors.join("\n") || null, runId]
+  });
+
+  return {
+    updated,
+    unchanged,
+    checked,
+    skipped: false,
+    status,
+    errors
+  };
 }
 
 export default {
