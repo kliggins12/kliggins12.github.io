@@ -56,6 +56,7 @@ CREATE TABLE IF NOT EXISTS migration_runs (
   source_files_verified INTEGER NOT NULL DEFAULT 0,
   ingestion_runs_expected INTEGER NOT NULL DEFAULT 0,
   ingestion_runs_verified INTEGER NOT NULL DEFAULT 0,
+  standby_baseline_change_id INTEGER NOT NULL DEFAULT 0,
   error TEXT
 );
 
