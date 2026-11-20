@@ -1,0 +1,55 @@
+name: Temporary Turso CSV Preview
+
+on:
+  push:
+    branches:
+      - preview/turso-temp-observations-2026-11-20
+  workflow_dispatch:
+    inputs:
+      sample_size:
+        description: "Latest valid drawings per game/session stream (maximum 100)"
+        required: true
+        type: number
+        default: 100
+
+permissions:
+  contents: read
+
+concurrency:
+  group: batchmate-turso-temp-preview
+  cancel-in-progress: false
+
+jobs:
+  preview:
+    name: Load isolated temporary preview into Turso
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Check out preview branch
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Install project dependencies
+        working-directory: cloudflare
+        run: npm install --no-audit --no-fund
+
+      - name: Fetch, summarize, and load temporary sample
+        working-directory: cloudflare
+        env:
+          TURSO_DATABASE_URL: ${{ secrets.TURSO_DATABASE_URL }}
+          TURSO_AUTH_TOKEN: ${{ secrets.TURSO_AUTH_TOKEN }}
+          TURSO_PREVIEW_SAMPLE_SIZE: ${{ inputs.sample_size || 100 }}
+        run: node scripts/temp-turso-preview.mjs
+
+      - name: Upload preview report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: batchmate-turso-temp-preview
+          path: cloudflare/temp-preview-output/
+          if-no-files-found: warn
+          retention-days: 1
