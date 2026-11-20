@@ -1,0 +1,51 @@
+name: Validate Turso migration changes
+
+on:
+  push:
+    branches:
+      - implementation/turso-full-history
+    paths:
+      - "cloudflare/**"
+      - ".github/workflows/test-turso-migration.yml"
+  pull_request:
+    branches:
+      - master
+    paths:
+      - "cloudflare/**"
+      - ".github/workflows/test-turso-migration.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: cloudflare/package.json
+
+      - name: Install dependencies
+        working-directory: cloudflare
+        run: npm install
+
+      - name: Syntax-check migration scripts
+        working-directory: cloudflare
+        run: |
+          node --check scripts/lib/full-history.mjs
+          node --check scripts/migrate-full-history.mjs
+          node --check scripts/migrate-turso.mjs
+
+      - name: Run Worker and migration regression tests
+        working-directory: cloudflare
+        run: npm test
+
+      - name: Type-check Worker
+        working-directory: cloudflare
+        run: npm run typecheck
