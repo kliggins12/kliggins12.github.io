@@ -379,6 +379,82 @@ export default {
     // Unified all-game read API. These routes read only from Turso's
     // lottery_draws table; they remain unused by the public frontend until
     // the full-history migration has been verified and cutover is approved.
+    if (url.pathname === "/api/primary/analysis") {
+      try {
+        const db = getTursoClient(env);
+        const result = await db.execute(
+          "SELECT artifact_key,payload_json,payload_sha256,generated_at,payload_bytes,imported_at " +
+          "FROM analysis_artifacts WHERE artifact_key IN ('batchmate_data','tight_tickets')"
+        );
+        const artifacts = new Map(result.rows.map((row) => [String(row.artifact_key), row]));
+        const batchmateRow = artifacts.get("batchmate_data");
+        const tightRow = artifacts.get("tight_tickets");
+        if (!batchmateRow || !tightRow) {
+          return json({
+            ok: false,
+            storage: "turso-primary",
+            error: "The latest Batchmate analysis snapshots have not been imported yet."
+          }, 503);
+        }
+
+        const batchmateText = String(batchmateRow.payload_json);
+        const tightText = String(tightRow.payload_json);
+        const batchmateBytes = new TextEncoder().encode(batchmateText);
+        const tightBytes = new TextEncoder().encode(tightText);
+        const batchmateHash = await sha256Hex(
+          batchmateBytes.buffer.slice(batchmateBytes.byteOffset, batchmateBytes.byteOffset + batchmateBytes.byteLength) as ArrayBuffer
+        );
+        const tightHash = await sha256Hex(
+          tightBytes.buffer.slice(tightBytes.byteOffset, tightBytes.byteOffset + tightBytes.byteLength) as ArrayBuffer
+        );
+        if (batchmateHash !== String(batchmateRow.payload_sha256) ||
+            tightHash !== String(tightRow.payload_sha256)) {
+          return json({
+            ok: false,
+            storage: "turso-primary",
+            error: "The stored analysis snapshots failed their integrity check."
+          }, 503);
+        }
+
+        const batchmateData = JSON.parse(batchmateText);
+        const tightTickets = JSON.parse(tightText);
+        if (!batchmateData || !Array.isArray(batchmateData.games) ||
+            !tightTickets || !Array.isArray(tightTickets.tickets) ||
+            !Array.isArray(tightTickets.latest_draws)) {
+          return json({
+            ok: false,
+            storage: "turso-primary",
+            error: "The stored analysis snapshots do not match the expected data format."
+          }, 503);
+        }
+
+        return json({
+          ok: true,
+          storage: "turso-primary",
+          artifacts: {
+            batchmate_data: {
+              generated_at: String(batchmateRow.generated_at),
+              sha256: batchmateHash,
+              bytes: Number(batchmateRow.payload_bytes)
+            },
+            tight_tickets: {
+              generated_at: String(tightRow.generated_at),
+              sha256: tightHash,
+              bytes: Number(tightRow.payload_bytes)
+            }
+          },
+          batchmate_data: batchmateData,
+          tight_tickets: tightTickets
+        });
+      } catch (error) {
+        return json({
+          ok: false,
+          storage: "turso-primary",
+          error: error instanceof Error ? error.message : "Analysis snapshots are unavailable"
+        }, 503);
+      }
+    }
+
     if (url.pathname === "/api/primary/draws/summary") {
       try {
         const db = getTursoClient(env);
