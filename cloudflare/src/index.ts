@@ -471,10 +471,19 @@ export default {
           return json({ error: "Source file does not match the requested game/session." }, 400);
         }
       }
+      const beforeSource = url.searchParams.get("beforeSource");
       if (before) {
-        const validDate = /^\\d{4}-\\d{2}-\\d{2}$/.test(before) &&
-          new Date(before + "T00:00:00.000Z").toISOString().slice(0, 10) === before;
+        const dateValue = new Date(before + "T00:00:00.000Z");
+        const validDate = /^\d{4}-\d{2}-\d{2}$/.test(before) &&
+          Number.isFinite(dateValue.getTime()) &&
+          dateValue.toISOString().slice(0, 10) === before;
         if (!validDate) return json({ error: "before must be a real YYYY-MM-DD date." }, 400);
+      }
+      if (beforeSource && !validSources.has(beforeSource)) {
+        return json({ error: "beforeSource must be a supported source filename." }, 400);
+      }
+      if (beforeSource && !before) {
+        return json({ error: "beforeSource requires before." }, 400);
       }
 
       const parsedLimit = Number(url.searchParams.get("limit") || 100);
@@ -484,7 +493,13 @@ export default {
       if (game) { clauses.push("game=?"); args.push(game); }
       if (session) { clauses.push("session=?"); args.push(session); }
       if (sourceFilename) { clauses.push("source_filename=?"); args.push(sourceFilename); }
-      if (before) { clauses.push("draw_date<?"); args.push(before); }
+      if (before && beforeSource) {
+        clauses.push("(draw_date<? OR (draw_date=? AND source_filename>?))");
+        args.push(before, before, beforeSource);
+      } else if (before) {
+        clauses.push("draw_date<?");
+        args.push(before);
+      }
 
       try {
         const db = getTursoClient(env);
@@ -492,7 +507,7 @@ export default {
           sql: `SELECT source_filename,game,session,draw_date,numbers_json,source_sha256,imported_at
                 FROM lottery_draws
                 ${clauses.length ? "WHERE " + clauses.join(" AND ") : ""}
-                ORDER BY draw_date DESC,source_filename
+                ORDER BY draw_date DESC,source_filename ASC
                 LIMIT ?`,
           args: [...args, limit]
         });
@@ -510,7 +525,8 @@ export default {
           storage: "turso-primary",
           count: draws.length,
           draws,
-          nextBefore: draws.length === limit ? draws[draws.length - 1].draw_date : null
+          nextBefore: draws.length === limit ? draws[draws.length - 1].draw_date : null,
+          nextBeforeSource: draws.length === limit ? draws[draws.length - 1].source_filename : null
         });
       } catch (error) {
         return json({
