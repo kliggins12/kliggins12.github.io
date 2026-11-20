@@ -614,6 +614,71 @@ export default {
       }
     }
 
+    // Read-only D1 export endpoints used only during the Turso migration.
+    // They do not write to D1 and are not the public application data API.
+    if (url.pathname === "/api/migration/source-files") {
+      try {
+        const result = await env.DB.prepare(`
+          SELECT filename,source_url,sha256,bytes,row_count,fetched_at,
+                 last_modified,etag,r2_key
+          FROM source_files
+          ORDER BY filename
+        `).all();
+        return json({
+          ok: true,
+          storage: "cloudflare-d1-migration-source",
+          count: result.results.length,
+          sources: result.results
+        });
+      } catch (error) {
+        return json({
+          ok: false,
+          error: error instanceof Error ? error.message : "Source metadata export failed"
+        }, 503);
+      }
+    }
+
+    if (url.pathname === "/api/migration/ingestion-runs") {
+      const beforeValue = url.searchParams.get("before");
+      const before = beforeValue === null ? null : Number(beforeValue);
+      if (beforeValue !== null && (!Number.isSafeInteger(before) || before <= 0)) {
+        return json({ error: "before must be a positive ingestion run ID." }, 400);
+      }
+      const requestedLimit = Number(url.searchParams.get("limit") || 100);
+      const limit = Number.isFinite(requestedLimit)
+        ? Math.min(200, Math.max(1, Math.trunc(requestedLimit)))
+        : 100;
+      try {
+        const result = before === null
+          ? await env.DB.prepare(`
+              SELECT id,started_at,finished_at,status,files_expected,files_updated,error
+              FROM ingestion_runs
+              ORDER BY id DESC
+              LIMIT ?
+            `).bind(limit).all()
+          : await env.DB.prepare(`
+              SELECT id,started_at,finished_at,status,files_expected,files_updated,error
+              FROM ingestion_runs
+              WHERE id < ?
+              ORDER BY id DESC
+              LIMIT ?
+            `).bind(before, limit).all();
+        const runs = result.results;
+        return json({
+          ok: true,
+          storage: "cloudflare-d1-migration-source",
+          count: runs.length,
+          runs,
+          nextBefore: runs.length === limit ? Number(runs[runs.length - 1].id) : null
+        });
+      } catch (error) {
+        return json({
+          ok: false,
+          error: error instanceof Error ? error.message : "Ingestion metadata export failed"
+        }, 503);
+      }
+    }
+
     if (url.pathname === "/api/status") {
       const [run, files] = await Promise.all([
         env.DB.prepare("SELECT * FROM ingestion_runs ORDER BY id DESC LIMIT 1").first(),
