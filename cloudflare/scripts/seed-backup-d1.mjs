@@ -11,8 +11,13 @@ const BACKUP = {
 };
 
 const WRITE_GUARD = 80_000;
-const PAGE_SIZE = 500;
-const MAX_DRAW_ROWS = Number(process.env.MAX_DRAW_ROWS || 60_000);
+// Keep a 20,000-row reserve below the intended 80,000-row safety guard.
+// D1 Insights can lag, so the durable per-UTC-day ledger below is authoritative
+// for this script's own reservations across separate workflow runs.
+const HARD_WRITE_BUDGET = 60_000;
+const ESTIMATED_WRITES_PER_DRAW = 6; // observed amplification: 5 D1 rows_written per draw
+const PAGE_SIZE = 100; // bound worst-case overshoot if D1 reports higher amplification
+const MAX_DRAW_ROWS = Number(process.env.MAX_DRAW_ROWS || 5_000);
 
 function assertConfig() {
   for (const [label, value] of [
@@ -21,8 +26,8 @@ function assertConfig() {
   ]) {
     if (!value) throw new Error("Missing required GitHub secret: " + label);
   }
-  if (!Number.isSafeInteger(MAX_DRAW_ROWS) || MAX_DRAW_ROWS < 1 || MAX_DRAW_ROWS > 70_000) {
-    throw new Error("MAX_DRAW_ROWS must be an integer from 1 to 70000.");
+  if (!Number.isSafeInteger(MAX_DRAW_ROWS) || MAX_DRAW_ROWS < 1 || MAX_DRAW_ROWS > 5_000) {
+    throw new Error("MAX_DRAW_ROWS must be an integer from 1 to 5000.");
   }
 }
 
@@ -124,6 +129,51 @@ async function scalar(connection, sql) {
   return Number(result.results?.[0]?.value ?? 0);
 }
 
+
+async function ensureBudgetTable() {
+  await query(BACKUP, `
+    CREATE TABLE IF NOT EXISTS backup_seed_budget (
+      utc_day TEXT PRIMARY KEY,
+      reserved_rows INTEGER NOT NULL DEFAULT 0,
+      updated_at TEXT NOT NULL
+    )
+  `);
+}
+
+async function reserveWriteBudget(rows, reason) {
+  const reserve = Math.max(0, Math.ceil(Number(rows) || 0));
+  if (!reserve) return;
+  const utcDay = new Date().toISOString().slice(0, 10);
+  const usage = await usageToday();
+  const ledger = await query(BACKUP,
+    "SELECT reserved_rows AS value FROM backup_seed_budget WHERE utc_day=?",
+    [utcDay]
+  );
+  const alreadyReserved = Number(ledger.results?.[0]?.value || 0);
+  // Use the larger of delayed analytics and our durable estimate. This avoids
+  // double-counting our own writes while still respecting higher observed use.
+  const baseline = Math.max(usage.rowsWritten, alreadyReserved);
+  if (baseline + reserve > HARD_WRITE_BUDGET) {
+    throw new Error(
+      `Backup D1 write budget blocked before ${reason}: observed=${usage.rowsWritten}, ` +
+      `reserved=${alreadyReserved}, requested=${reserve}, hard budget=${HARD_WRITE_BUDGET}. ` +
+      "No further writes were issued."
+    );
+  }
+  const result = await query(BACKUP, `
+    INSERT INTO backup_seed_budget(utc_day,reserved_rows,updated_at)
+    VALUES(?,?,?)
+    ON CONFLICT(utc_day) DO UPDATE SET
+      reserved_rows=backup_seed_budget.reserved_rows+excluded.reserved_rows,
+      updated_at=excluded.updated_at
+    WHERE backup_seed_budget.reserved_rows+excluded.reserved_rows<=?
+    RETURNING reserved_rows
+  `, [utcDay, reserve, new Date().toISOString(), HARD_WRITE_BUDGET]);
+  if (!result.results?.length) {
+    throw new Error(`Backup D1 daily write reservation refused for ${reason}; stopping before data writes.`);
+  }
+}
+
 async function copyMetadata() {
   // Copy audit-run metadata first. Do not copy source hash pointers yet:
   // Backup must not advertise a source as current until every drawing row
@@ -147,6 +197,7 @@ async function copyMetadata() {
       OR COALESCE(ingestion_runs.error,'')<>COALESCE(excluded.error,'')`
   ));
 
+  await reserveWriteBudget(runStatements.length * ESTIMATED_WRITES_PER_DRAW + 10, "ingestion-run metadata");
   const rowsWritten = await batch(BACKUP, runStatements);
   return { ingestionRuns: runs.length, rowsWritten };
 }
@@ -172,70 +223,121 @@ async function copySourceFiles() {
       OR source_files.r2_key<>excluded.r2_key`
   ));
 
+  await reserveWriteBudget(statements.length * 10 + 10, "source-file metadata");
   const rowsWritten = await batch(BACKUP, statements);
   return { sourceFiles: sources.length, rowsWritten };
 }
 
 async function copyDraws(maxRows) {
-  const currentMax = await scalar(BACKUP, "SELECT COALESCE(MAX(id),0) AS value FROM draws");
   const mainCount = await scalar(PRIMARY, "SELECT COUNT(*) AS value FROM draws");
-  const backupCountBefore = await scalar(BACKUP, "SELECT COUNT(*) AS value FROM draws");
-  let lastId = currentMax;
+  const before = (await query(BACKUP, `
+    SELECT COUNT(*) AS row_count,COALESCE(MIN(id),0) AS min_id,
+           COALESCE(MAX(id),0) AS max_id,COALESCE(SUM(id),0) AS id_sum
+    FROM draws
+  `)).results?.[0] || {};
+  const backupCountBefore = Number(before.row_count || 0);
+  const backupMaxId = Number(before.max_id || 0);
+  const expectedIdSum = backupMaxId * (backupMaxId + 1) / 2;
+  // A count/min/max/sum check proves the existing IDs are exactly 1..MAX.
+  // If not, rescan Main from ID 0 and repair holes instead of trusting MAX(id).
+  const existingIdsContiguous =
+    backupCountBefore === backupMaxId &&
+    Number(before.min_id || 0) === (backupCountBefore ? 1 : 0) &&
+    Number(before.id_sum || 0) === expectedIdSum;
+
+  let scanAfterId = existingIdsContiguous ? backupMaxId : 0;
   let copied = 0;
   let rowsWritten = 0;
-  const target = maxRows;
+  let scanned = 0;
 
-  while (copied < target) {
-    const pageLimit = Math.min(PAGE_SIZE, target - copied);
+  while (copied < maxRows) {
     const page = (await query(PRIMARY,
       `SELECT id,source_filename,game,session,draw_date,numbers_json,source_sha256,imported_at
        FROM draws WHERE id>? ORDER BY id LIMIT ?`,
-      [lastId, pageLimit]
+      [scanAfterId, PAGE_SIZE]
     )).results || [];
     if (!page.length) break;
 
-    const statements = page.map((row) => rowInsert(
-      "draws",
-      ["id","source_filename","game","session","draw_date","numbers_json","source_sha256","imported_at"],
-      [row.id,row.source_filename,row.game,row.session,row.draw_date,row.numbers_json,row.source_sha256,row.imported_at],
-      `ON CONFLICT(id) DO UPDATE SET
-        source_filename=excluded.source_filename,game=excluded.game,session=excluded.session,
-        draw_date=excluded.draw_date,numbers_json=excluded.numbers_json,
-        source_sha256=excluded.source_sha256,imported_at=excluded.imported_at
-      WHERE draws.source_filename<>excluded.source_filename OR draws.game<>excluded.game
-        OR draws.session<>excluded.session OR draws.draw_date<>excluded.draw_date
-        OR draws.numbers_json<>excluded.numbers_json OR draws.source_sha256<>excluded.source_sha256
-        OR draws.imported_at<>excluded.imported_at`
-    ));
-
-    const written = await batch(BACKUP, statements);
-    rowsWritten += written;
-    copied += page.length;
-    lastId = Number(page[page.length - 1].id);
-
-    process.stdout.write(
-      `Copied through Main draw ID ${lastId}: ${copied.toLocaleString()} this run; ${rowsWritten.toLocaleString()} D1 rows written this run.\n`
-    );
-
-    // Re-read real daily usage after each chunk. If analytics lags, the
-    // per-run count still bounds this run; the workflow is intended to be
-    // run once per UTC day, below the 80% safety ceiling.
-    const usage = await usageToday();
-    if (usage.rowsWritten >= WRITE_GUARD) {
-      process.stdout.write("Backup D1 reached the 80% write guard; stopping safely.\n");
-      break;
+    let toWrite = page;
+    if (!existingIdsContiguous) {
+      const ids = page.map((row) => Number(row.id));
+      const existing = (await query(BACKUP, `
+        SELECT id,source_filename,game,session,draw_date,numbers_json,source_sha256,imported_at
+        FROM draws WHERE id IN (${ids.join(",")})
+      `)).results || [];
+      const byId = new Map(existing.map((row) => [Number(row.id), row]));
+      const same = (a, b) =>
+        !!b &&
+        String(a.source_filename) === String(b.source_filename) &&
+        String(a.game) === String(b.game) &&
+        String(a.session) === String(b.session) &&
+        String(a.draw_date) === String(b.draw_date) &&
+        String(a.numbers_json) === String(b.numbers_json) &&
+        String(a.source_sha256) === String(b.source_sha256) &&
+        String(a.imported_at) === String(b.imported_at);
+      toWrite = page.filter((row) => !same(row, byId.get(Number(row.id))));
     }
+
+    if (toWrite.length) {
+      // Reserve before issuing the D1 batch. Six writes per draw is above the
+      // observed five-write amplification; the 20k daily margin absorbs drift.
+      const estimate = toWrite.length * ESTIMATED_WRITES_PER_DRAW + 10;
+      await reserveWriteBudget(estimate, "draw batch");
+      const statements = toWrite.map((row) => rowInsert(
+        "draws",
+        ["id","source_filename","game","session","draw_date","numbers_json","source_sha256","imported_at"],
+        [row.id,row.source_filename,row.game,row.session,row.draw_date,row.numbers_json,row.source_sha256,row.imported_at],
+        `ON CONFLICT(id) DO UPDATE SET
+          source_filename=excluded.source_filename,game=excluded.game,session=excluded.session,
+          draw_date=excluded.draw_date,numbers_json=excluded.numbers_json,
+          source_sha256=excluded.source_sha256,imported_at=excluded.imported_at
+        WHERE draws.source_filename<>excluded.source_filename OR draws.game<>excluded.game
+          OR draws.session<>excluded.session OR draws.draw_date<>excluded.draw_date
+          OR draws.numbers_json<>excluded.numbers_json OR draws.source_sha256<>excluded.source_sha256
+          OR draws.imported_at<>excluded.imported_at`
+      ));
+      const written = await batch(BACKUP, statements);
+      rowsWritten += written;
+      if (written > estimate) {
+        throw new Error(
+          `D1 write amplification exceeded the reserved estimate (${written} > ${estimate}); ` +
+          "stopping immediately. Do not rerun until the daily usage is reviewed."
+        );
+      }
+      copied += toWrite.length;
+    }
+
+    scanned += page.length;
+    scanAfterId = Number(page[page.length - 1].id);
+    process.stdout.write(
+      `Scanned through Main draw ID ${scanAfterId}: ${scanned.toLocaleString()} scanned, ` +
+      `${copied.toLocaleString()} copied/repaired this run; ${rowsWritten.toLocaleString()} D1 rows written.\\n`
+    );
   }
 
-  const backupCountAfter = await scalar(BACKUP, "SELECT COUNT(*) AS value FROM draws");
+  const after = (await query(BACKUP, `
+    SELECT COUNT(*) AS row_count,COALESCE(MIN(id),0) AS min_id,
+           COALESCE(MAX(id),0) AS max_id,COALESCE(SUM(id),0) AS id_sum
+    FROM draws
+  `)).results?.[0] || {};
+  const backupCountAfter = Number(after.row_count || 0);
+  const afterMaxId = Number(after.max_id || 0);
+  const coverageMatch =
+    backupCountAfter === mainCount &&
+    Number(after.min_id || 0) === (mainCount ? 1 : 0) &&
+    afterMaxId === mainCount &&
+    Number(after.id_sum || 0) === mainCount * (mainCount + 1) / 2;
+
   return {
     mainDraws: mainCount,
     backupDrawsBefore: backupCountBefore,
     backupDrawsAfter: backupCountAfter,
     copiedThisRun: copied,
+    scannedThisRun: scanned,
     rowsWrittenThisRun: rowsWritten,
-    nextMainId: lastId < currentMax ? currentMax : lastId,
-    complete: backupCountAfter >= mainCount
+    resumeMode: existingIdsContiguous ? "after-contiguous-backup-high-watermark" : "full-scan-repair-missing-or-mismatched-ids",
+    nextMainId: scanAfterId,
+    complete: coverageMatch
   };
 }
 
@@ -264,30 +366,31 @@ async function verify() {
     FROM draws GROUP BY source_filename ORDER BY source_filename
   `)).results || [];
 
+  const mainIds = (await query(PRIMARY, "SELECT COUNT(*) AS row_count,COALESCE(MIN(id),0) AS min_id,COALESCE(MAX(id),0) AS max_id,COALESCE(SUM(id),0) AS id_sum FROM draws")).results?.[0] || {};
+  const backupIds = (await query(BACKUP, "SELECT COUNT(*) AS row_count,COALESCE(MIN(id),0) AS min_id,COALESCE(MAX(id),0) AS max_id,COALESCE(SUM(id),0) AS id_sum FROM draws")).results?.[0] || {};
+  const idCoverageMatch = JSON.stringify(mainIds) === JSON.stringify(backupIds);
   const groupsMatch = JSON.stringify(mainGroups) === JSON.stringify(backupGroups);
-  return { main, backup, sourceGroupsMatch: groupsMatch, drawDataMatch: main.draws === backup.draws && groupsMatch };
+  return {
+    main, backup, sourceGroupsMatch: groupsMatch, idCoverageMatch,
+    drawDataMatch: main.draws === backup.draws && idCoverageMatch && groupsMatch
+  };
 }
 
 async function main() {
   assertConfig();
+  await ensureBudgetTable();
+
   const [primaryDrawCount, backupDrawCount, usage] = await Promise.all([
     scalar(PRIMARY, "SELECT COUNT(*) AS value FROM draws"),
     scalar(BACKUP, "SELECT COUNT(*) AS value FROM draws"),
     usageToday()
   ]);
-  const remaining = Math.max(0, primaryDrawCount - backupDrawCount);
-  const requestedRows = Math.min(MAX_DRAW_ROWS, remaining);
-  const metadataBudget = 60;
-  const maxAllowedNow = Math.max(0, WRITE_GUARD - usage.rowsWritten - metadataBudget);
-  const rowsThisRun = Math.min(requestedRows, maxAllowedNow);
-
   process.stdout.write(
     `Main D1 drawings: ${primaryDrawCount}; Backup D1 drawings: ${backupDrawCount}; ` +
-    `Backup D1 rows written today (UTC): ${usage.rowsWritten}.\\n`
+    `Backup D1 rows written today (UTC): ${usage.rowsWritten}; per-run max: ${MAX_DRAW_ROWS}.\\n`
   );
-
-  if (remaining > 0 && rowsThisRun === 0) {
-    throw new Error("Backup D1 is at or near the 80% daily write guard. Resume after the UTC daily reset.");
+  if (usage.rowsWritten >= WRITE_GUARD) {
+    throw new Error("Backup D1 has reached the observed 80,000-row write guard. No writes will be attempted.");
   }
 
   const metadata = await copyMetadata();
@@ -295,24 +398,33 @@ async function main() {
     `Audit metadata sync: ${metadata.ingestionRuns} ingestion runs, ${metadata.rowsWritten} rows written.\\n`
   );
 
-  const draws = await copyDraws(rowsThisRun);
+  // MAX_DRAW_ROWS is a cap on rows repaired/copied, not a high-water mark.
+  // copyDraws validates continuity and rescans from ID 0 if gaps exist.
+  const draws = await copyDraws(MAX_DRAW_ROWS);
   const prePromotion = await verify();
 
   let sourceMetadata = { sourceFiles: 0, rowsWritten: 0, promoted: false };
-  if (prePromotion.drawDataMatch) {
+  if (prePromotion.drawDataMatch && draws.complete) {
     sourceMetadata = { ...(await copySourceFiles()), promoted: true };
   } else {
-    process.stdout.write("Backup drawing data is incomplete or does not yet match Main; source hash pointers remain unpromoted.\\n");
+    process.stdout.write("Drawing transfer is incomplete or mismatched; source hash metadata remains unpromoted.\\n");
   }
 
   const verification = await verify();
-  process.stdout.write(JSON.stringify({ metadata, draws, sourceMetadata, verification }, null, 2) + "\\n");
+  const complete =
+    draws.complete &&
+    verification.drawDataMatch &&
+    verification.backup.sources === verification.main.sources &&
+    verification.backup.runs === verification.main.runs &&
+    sourceMetadata.promoted;
 
-  if (draws.complete && !verification.drawDataMatch) {
-    throw new Error("Backup draw groups do not match Main. Do not activate Backup until reconciled.");
-  }
-  if (sourceMetadata.promoted && verification.backup.sources !== verification.main.sources) {
-    throw new Error("Backup source metadata count does not match Main.");
+  process.stdout.write(JSON.stringify({ metadata, draws, sourceMetadata, verification, complete }, null, 2) + "\\n");
+
+  if (!complete) {
+    throw new Error(
+      "Backup seed verification FAILED: transfer is incomplete or metadata does not match Main. " +
+      "Workflow must remain failed; do not enable failover or production ingestion."
+    );
   }
 }
 
