@@ -383,20 +383,22 @@ async function verify() {
 
 async function main() {
   assertConfig();
+  // Check delayed Cloudflare usage analytics before even creating the ledger table.
+  // If the current UTC-day guard is already exceeded, this invocation is read-only.
+  const initialUsage = await usageToday();
+  if (initialUsage.rowsWritten >= WRITE_GUARD) {
+    throw new Error("Backup D1 has reached the observed 80,000-row write guard. No database writes will be attempted.");
+  }
   await ensureBudgetTable();
 
-  const [primaryDrawCount, backupDrawCount, usage] = await Promise.all([
+  const [primaryDrawCount, backupDrawCount] = await Promise.all([
     scalar(PRIMARY, "SELECT COUNT(*) AS value FROM draws"),
-    scalar(BACKUP, "SELECT COUNT(*) AS value FROM draws"),
-    usageToday()
+    scalar(BACKUP, "SELECT COUNT(*) AS value FROM draws")
   ]);
   process.stdout.write(
     `Main D1 drawings: ${primaryDrawCount}; Backup D1 drawings: ${backupDrawCount}; ` +
-    `Backup D1 rows written today (UTC): ${usage.rowsWritten}; per-run max: ${MAX_DRAW_ROWS}.\\n`
+    `Backup D1 rows written today (UTC): ${initialUsage.rowsWritten}; per-run max: ${MAX_DRAW_ROWS}.\\n`
   );
-  if (usage.rowsWritten >= WRITE_GUARD) {
-    throw new Error("Backup D1 has reached the observed 80,000-row write guard. No writes will be attempted.");
-  }
 
   const metadata = await copyMetadata();
   process.stdout.write(
