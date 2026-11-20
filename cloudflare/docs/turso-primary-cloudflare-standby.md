@@ -130,10 +130,10 @@ Required controls:
 ## 8. Migration sequence
 
 1. Inventory all existing D1 tables, Markov/model artifacts, Turso databases/tables, current Turso usage, and all application routes that read or write data.
-2. Design and apply the complete Turso schema in a separate test database or isolated prefixed tables. Do not drop or rename current tables.
-3. Copy the complete existing Main D1 dataset into Turso in bounded, resumable batches. Include all 17 sources, 84,589 known drawing records, 17 source-file metadata records, 31 ingestion runs, and all model/replay artifacts found during inventory.
-4. Verify exact key coverage, row payload hashes, source metadata, ingestion metadata, and model identity. Counts alone are insufficient.
-5. Refactor the Worker data-access layer so Turso is the only normal application database. Keep D1 bindings out of normal request handlers except for the explicit read-only fallback adapter and replication process.\n6. Migrate the static Batchmate/NumberLab frontend contracts to the Worker API or a generated, versioned response cache whose source is Turso; do not point the frontend directly at database credentials.\n7. Shadow-test every frontend data view against the existing JSON output and current D1 results.
+2. Design and apply the complete additive Turso schema. The implementation branch now adds `lottery_draws` for all 17 feeds, operational metadata tables, and an import-verification ledger. Existing tables are retained.
+3. Run the new read-only full-history report. It compares all 17 D1-backed source feeds with unified Turso records using row counts and SHA-256 fingerprints. The separate import mode requires an exact confirmation phrase and uses idempotent batches of 100.
+4. After the drawing import, verify exact key coverage, row payload hashes, source metadata, complete ingestion metadata, and model identity. Drawing fingerprint verification is implemented; metadata/model transfer is still outstanding.
+5. Refactor the Worker data-access layer so Turso is the only normal application database. This implementation has not yet changed the production Worker read/write paths.\n6. Migrate the static Batchmate/NumberLab frontend contracts to the Worker API or a generated, versioned response cache whose source is Turso; do not point the frontend directly at database credentials.\n7. Shadow-test every frontend data view against the existing JSON output and current D1 results.
 6. Implement and test the service-mode state machine, user-facing banner, cache behavior, quota detection, and read-only restrictions.
 7. Establish Turso-to-D1 standby replication and prove the D1 mirror is eligible before any production failover test.
 8. Run read-only shadow comparisons between old D1 results and Turso results for every API route and game.
@@ -163,3 +163,8 @@ Production cutover is blocked until all of the following are true:
 - Cloudflare Cron: not enabled.
 - Automatic failover/failback: not enabled.
 - Production routing: unchanged.
+
+
+## 11. Implementation branch status (2026-11-20)
+
+The branch `implementation/turso-full-history` adds an additive all-game Turso schema and a guarded migration tool. The migration tool reads the existing 17 D1-backed source feeds through the current Worker API and compares them with Turso. It has two modes: a read-only report and a separately confirmed import. The import uses idempotent upserts and verifies each source with a content fingerprint. Neither mode has been run against the live Turso database from this branch. The production Worker, frontend routing, ingestion schedule, D1 replication, and hosting route remain unchanged.
