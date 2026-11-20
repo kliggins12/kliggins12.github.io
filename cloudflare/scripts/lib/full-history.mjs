@@ -67,7 +67,7 @@ export function normalizeDrawRow(row, source) {
   }
   if (!Array.isArray(numbers) || numbers.length === 0 ||
       numbers.some((number) => !Number.isInteger(number) || number < 0)) {
-    throw new Error(`Drawing numbers must be a non-empty array of non-negative integers in ${source.filename} for ${drawDate}.`);
+    throw new Error(`Drawing numbers must contain exactly the expected count of non-negative integers in ${source.filename} for ${drawDate}.`);
   }
 
   return {
