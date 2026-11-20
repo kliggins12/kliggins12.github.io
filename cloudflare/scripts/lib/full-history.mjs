@@ -65,7 +65,7 @@ export function normalizeDrawRow(row, source) {
   } catch {
     throw new Error(`Invalid numbers_json in ${source.filename} for ${drawDate}.`);
   }
-  if (!Array.isArray(numbers) || numbers.length === 0 ||
+  if (!Array.isArray(numbers) || numbers.length !== EXPECTED_NUMBER_COUNTS[game] ||
       numbers.some((number) => !Number.isInteger(number) || number < 0)) {
     throw new Error(`Drawing numbers must contain exactly the expected count of non-negative integers in ${source.filename} for ${drawDate}.`);
   }
