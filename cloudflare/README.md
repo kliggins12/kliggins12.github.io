@@ -4,12 +4,13 @@ This is the first infrastructure stage for moving Batchmate and Slotterhouse off
 
 ## Architecture
 
-- Cloudflare Worker: scheduled source collection and read API.
-- D1: ingestion run and source-file metadata.
-- R2: immutable-by-version-key source CSV archive (current object key per source is updated only after a successful download).
-- Pages: static Batchmate and Slotterhouse frontends.
+- Cloudflare Worker: scheduled source collection, parsing, D1 indexing, Turso session synchronization, and read API.
+- D1: ingestion runs, source-file metadata, and canonical indexed drawings for all 17 sources.
+- R2: immutable-by-version-key source CSV archive (current object key per source is updated only after parsing and required database writes succeed).
+- Turso: canonical chronological history for the 12 Pick 3, Daily 4, and All or Nothing session streams.
+- Pages: static Batchmate and NumberLab frontends.
 
-The collector validates all 17 responses as non-empty CSV-like content, hashes each file, skips unchanged sources, archives changed sources in R2, and records source metadata in D1. It never overwrites a prior good object when a download fails.
+The collector validates all 17 responses as non-empty CSV-like content, hashes each file, skips unchanged sources, and archives changed sources in R2. A changed file is parsed and upserted into D1 before its current-source metadata pointer is advanced. For Pick 3, Daily 4, and All or Nothing, the same parsed rows are also upserted into Turso's 12 session streams. If parsing or the Turso write fails, the current-source pointer is not advanced, so the next scheduled collection retries the file. The previous versioned R2 object remains available.
 
 ## Important migration boundary
 
@@ -36,8 +37,12 @@ curl -X POST "https://YOUR-WORKER.workers.dev/api/admin/ingest" \
 
 - `GET /health`
 - `GET /api/status`
+- `GET /api/turso/health`
+- `GET /api/session-draws/summary`
+- `GET /api/session-draws?game=...&session=...`
 - `GET /api/sources/:filename` (one of the 17 allowlisted CSV names)
-- `POST /api/admin/ingest` (Bearer token required)
+- `POST /api/admin/reindex?file=...` (Bearer token required; reindexes D1 and mirrors sessioned games into Turso)
+- `POST /api/admin/ingest` (Bearer token required; changed files are parsed and synchronized before metadata advances)
 
 ## Next migration milestones
 
