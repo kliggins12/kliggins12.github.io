@@ -209,7 +209,7 @@ header h1{font-size:clamp(28px,3.2vw,34px)}
   </div>
 </main>
 <script>
-const DATA_API = 'https://batchmate-data.kamika-us.workers.dev';
+const DATA_API = 'https://kamika.tail085272.ts.net';
 let DATA = null, TIGHT = null, DATA_SOURCE = 'legacy', latestOfficialDraws = [], sortKey = 'best_streak', sortDir = -1;
 let tightKey = 'best', tightDir = -1;
 
@@ -234,11 +234,11 @@ async function load() {
       const payload = await readJson(DATA_API + '/api/primary/analysis');
       if (!payload || payload.ok !== true || !payload.batchmate_data || !payload.tight_tickets ||
           !Array.isArray(payload.batchmate_data.games) || !Array.isArray(payload.tight_tickets.tickets)) {
-        throw new Error('Turso analysis snapshots are incomplete');
+        throw new Error('Local analysis snapshots are not available yet');
       }
       DATA = payload.batchmate_data;
       TIGHT = payload.tight_tickets;
-      DATA_SOURCE = 'turso-primary';
+      DATA_SOURCE = 'local-sqlite-primary';
     } catch (primaryError) {
       DATA = await readLegacyArtifact(
         'batchmate_data.json',
@@ -255,7 +255,7 @@ async function load() {
         'https://raw.githubusercontent.com/kliggins12/batchmate/master/tight_tickets.json'
       );
     } catch (error) {
-      if (DATA_SOURCE === 'turso-primary') throw error;
+      if (DATA_SOURCE === 'local-sqlite-primary') throw error;
       TIGHT = { tickets: [], latest_draws: [] };
     }
   }
@@ -269,7 +269,7 @@ async function load() {
   document.getElementById('genmeta').textContent = 'Updated ' + DATA.generated;
   const notice = document.getElementById('refreshNotice');
   if (notice) {
-    const sourceLabel = DATA_SOURCE === 'turso-primary' ? 'Turso primary' :
+    const sourceLabel = DATA_SOURCE === 'local-sqlite-primary' ? 'Local SQLite analysis' :
       DATA_SOURCE === 'injected' ? 'Embedded data' : 'Published analysis snapshot';
     notice.textContent = sourceLabel + ' · generated ' + DATA.generated;
   }
@@ -292,28 +292,27 @@ async function load() {
   renderReadj();
 }
 
-async function loadLatestDrawsFromCloudflare() {
+async function loadLatestDrawsFromLocalApi() {
   try {
     let payload;
     try {
       payload = await readJson(DATA_API + '/api/primary/draws/latest');
       if (!payload.ok || !Array.isArray(payload.draws) || payload.count !== 17) {
-        throw new Error('Turso latest-drawing feed is incomplete');
+        throw new Error('Local latest-drawing feed is incomplete');
       }
     } catch (primaryError) {
-      payload = await readJson(DATA_API + '/api/draws/latest');
-      if (!Array.isArray(payload.draws) || payload.count !== 17) {
-        throw new Error('Expected 17 latest source records; received ' + payload.count);
-      }
+      throw primaryError;
     }
     latestOfficialDraws = payload.draws.map(d=>({...d, numbers:d.numbers_json}));
     renderHot();
     const notice = document.getElementById('refreshNotice');
     const updatedAt = new Date().toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'short' });
     if (notice) notice.textContent = 'Drawing history updated · ' + updatedAt +
-      (payload.storage === 'turso-primary' ? ' · Turso primary' : ' · connected data service');
+      (payload.storage === 'local-sqlite' ? ' · local SQLite via Tailscale' : ' · connected data service');
   } catch (error) {
-    console.error('Batchmate latest draw API failed:', error);
+    console.error('Batchmate local latest draw API failed:', error);
+    const notice = document.getElementById('refreshNotice');
+    if (notice) notice.textContent = 'Connect to Tailscale to load the latest drawing results';
   }
 }
 
@@ -468,9 +467,9 @@ async function checkForNewData() {
   refreshCheckInFlight = true;
   try {
     let latest;
-    if (DATA_SOURCE === 'turso-primary') {
+    if (DATA_SOURCE === 'local-sqlite-primary') {
       const payload = await readJson(DATA_API + '/api/primary/analysis');
-      if (!payload || payload.ok !== true || !payload.batchmate_data) throw new Error('Turso analysis snapshot is not ready');
+      if (!payload || payload.ok !== true || !payload.batchmate_data) throw new Error('Local analysis snapshot is not ready');
       latest = payload.batchmate_data;
     } else {
       try {
@@ -509,7 +508,7 @@ function startDataPolling() {
     if (!document.hidden) checkForNewData();
   });
 }
-load().then(async()=>{ await loadLatestDrawsFromCloudflare(); startDataPolling(); }).catch(e=>{document.getElementById('status').textContent='Ticket analysis data is not available'; console.error(e); const notice=document.getElementById('refreshNotice'); if(notice) notice.textContent='Analysis data is not available';});
+load().then(async()=>{ await loadLatestDrawsFromLocalApi(); startDataPolling(); }).catch(e=>{document.getElementById('status').textContent='Ticket analysis data is not available'; console.error(e); const notice=document.getElementById('refreshNotice'); if(notice) notice.textContent='Analysis data is not available';});
 </script>
 </body>
 </html>
