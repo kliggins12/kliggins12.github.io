@@ -275,7 +275,7 @@ async function ingest(env: Env): Promise<{
       });
       if (!response.ok) throw new Error(`HTTP ${response.status}`);
       const text = await response.text();
-      if (!text.trim() || /^\s*<(?:!doctype\\s+html|html)/i.test(text)) {
+      if (!text.trim() || /^\s*<(?:!doctype\s+html|html)/i.test(text)) {
         throw new Error("Empty response or HTML returned instead of CSV");
       }
       if (!text.includes("\n") || !text.includes(",")) throw new Error("Response does not look like CSV");
