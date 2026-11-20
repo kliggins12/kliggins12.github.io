@@ -683,6 +683,21 @@ export default {
     if (request.method === "OPTIONS") return new Response(null, { status: 204, headers: CORS_HEADERS });
     if (url.pathname === "/health") return json({ ok: true, service: "batchmate-data", time: new Date().toISOString() });
 
+    // Keep every manual write behind the same pause switch as scheduled ingestion.
+    // Legacy D1 writers are disabled entirely while Turso is the primary database.
+    const isAdminWrite = request.method === "POST" && [
+      "/api/primary/admin/ingest",
+      "/api/primary/admin/reindex",
+      "/api/admin/reindex",
+      "/api/admin/ingest"
+    ].includes(url.pathname);
+    if (isAdminWrite && env.INGEST_PAUSED === "true") {
+      return json({ error: "Ingestion is paused; database writes are disabled." }, 423);
+    }
+    if (isAdminWrite && url.pathname.startsWith("/api/admin/") && env.DATA_MODE === "turso-primary") {
+      return json({ error: "Legacy D1 write routes are disabled while Turso is primary." }, 409);
+    }
+
     if (url.pathname === "/api/turso/health") {
       try {
         await checkTurso(env);
