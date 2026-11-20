@@ -22,7 +22,7 @@ The versioned schema files are:
 - `turso/0001_session_history.sql`: the original 12 session streams and board replay tables.
 - `turso/0002_primary_history.sql`: unified `lottery_draws` table for all 17 source files, operational metadata tables, and migration verification ledger.
 
-The new `lottery_draws` table uses `(source_filename, draw_date)` as its key. It preserves game, session, number order, source hash, and import timestamp. The existing `session_draws` table is retained during the compatibility period; it is not dropped by the migration.
+The new `lottery_draws` table uses `(source_filename, draw_date)` as its key. It preserves game, session, number order, source hash, and import timestamp. The existing `session_draws` table is retained during the compatibility period; it is not dropped by the migration. The same additive schema adds `analysis_artifacts`, a versioned store for the existing Batchmate analysis JSON snapshots.
 
 Run the schema initializer manually from GitHub Actions **Initialize Batchmate Turso Database** only after confirming the intended Turso database and credentials. The initializer applies both schema files idempotently and verifies the required tables. It does not copy drawing rows.
 
@@ -35,6 +35,8 @@ The all-game migration is a separate manually dispatched workflow: **Turso prima
 - Import is not run automatically by a push or deployment.
 
 The first report is expected to reveal how many rows are present in the unified Turso table before any import. A read-only report is the correct next operational check after applying the schema.
+
+The separate manually dispatched workflow **Turso Batchmate analysis artifact migration** validates and compares the two published analysis snapshots. Its `import` mode requires the exact confirmation phrase `IMPORT-ANALYSIS-ARTIFACTS`, retains prior versions, and verifies the imported payload hashes. This is not the drawing-history import and must be run only after the Turso schema has been applied.
 
 ## Database migration sequence
 
@@ -62,6 +64,7 @@ The first report is expected to reveal how many rows are present in the unified 
 - `GET /api/session-draws?game=...&session=...`
 - `GET /api/primary/draws/summary` (all 17 Turso feeds)
 - `GET /api/primary/draws/latest` (latest draw per source)
+- `GET /api/primary/analysis` (latest verified Batchmate analysis snapshots)
 - `GET /api/primary/draws?game=...&session=...&limit=...` (all-game history with date/source cursor)
 - `GET /api/sources/:filename`
 - `GET /api/draws/latest`
@@ -77,4 +80,14 @@ The existing `/api/draws` route is the read-only migration source for the 17-fee
 - Worker deployment workflow: `.github/workflows/deploy-worker.yml`
 - Schema initialization workflow: `.github/workflows/migrate-turso.yml`
 - Full-history migration workflow: `.github/workflows/turso-primary-full-history.yml`
+- Analysis artifact migration workflow: `.github/workflows/turso-analysis-artifacts.yml`
 - Production ingestion remains paused via `INGEST_PAUSED = "true"` and an empty Cron list.
+
+
+## Website integration status
+
+The implementation branch changes the Batchmate homepage to try Turso analysis snapshots first, then fall back to the public generated JSON snapshots. It prefers Turso's latest-drawing endpoint and retains the existing Worker/D1 route as fallback. The NumberLab page uses the all-game history endpoints only when all 17 expected feeds are present and non-empty; otherwise it clearly labels the 12-stream session-history fallback. Its current journal/comparison/frequency screens describe observed history and do not claim to predict future results.
+
+The analysis snapshot import has not been run. Until the additive Turso schema and artifact migration are run and verified, Batchmate continues to use the published JSON fallback. These site changes are not deployed to the production branch.
+
+No existing Markov/model artifact files were found in the scanned Batchmate and website GitHub repository trees. This does not prove there are no such artifacts in another store; inspect the existing Turso database and any external storage before treating the model inventory as complete.
