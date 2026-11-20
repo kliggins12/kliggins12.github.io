@@ -1100,6 +1100,48 @@ export default {
       return json({ count: result.results.length, draws: result.results });
     }
 
+    // Explicit Turso-primary administrative writes. These endpoints are
+    // token-protected and are separate from the legacy D1 collector routes.
+    if (url.pathname === "/api/primary/admin/ingest" && request.method === "POST") {
+      const token = request.headers.get("authorization");
+      if (!env.API_TOKEN || token !== `Bearer ${env.API_TOKEN}`) return json({ error: "Unauthorized" }, 401);
+      try {
+        const result = await ingestToTurso(env);
+        const statusCode = result.status === "partial" ? 207 : result.status === "failed" ? 502 : 200;
+        return json({ ok: result.status === "success" || result.status === "skipped", storage: "turso-primary", ...result }, statusCode);
+      } catch (error) {
+        return json({
+          ok: false,
+          storage: "turso-primary",
+          error: error instanceof Error ? error.message : "Turso ingestion failed"
+        }, 502);
+      }
+    }
+
+    if (url.pathname === "/api/primary/admin/reindex" && request.method === "POST") {
+      const token = request.headers.get("authorization");
+      if (!env.API_TOKEN || token !== `Bearer ${env.API_TOKEN}`) return json({ error: "Unauthorized" }, 401);
+      const filename = url.searchParams.get("file");
+      const source = TX.find((item) => item.filename === filename);
+      if (!source) return json({ error: "Supply one valid source filename using ?file=" + TX.map((item) => item.filename).join(",") }, 400);
+      try {
+        const db = getTursoClient(env);
+        const record = await db.execute({
+          sql: "SELECT r2_key,sha256 FROM source_files WHERE filename=?",
+          args: [source.filename]
+        });
+        if (!record.rows.length) return json({ ok: false, error: "No Turso source archive record exists for " + source.filename }, 404);
+        const item = record.rows[0];
+        const result = await reindexSourceToTurso(env, source, {
+          r2_key: String(item.r2_key),
+          sha256: String(item.sha256)
+        });
+        return json({ ok: true, storage: "turso-primary", ...result });
+      } catch (error) {
+        return json({ ok: false, storage: "turso-primary", error: error instanceof Error ? error.message : "Turso reindex failed" }, 502);
+      }
+    }
+
     if (url.pathname === "/api/admin/reindex" && request.method === "POST") {
       const token = request.headers.get("authorization");
       if (!env.API_TOKEN || token !== `Bearer ${env.API_TOKEN}`) return json({ error: "Unauthorized" }, 401);
@@ -1125,6 +1167,10 @@ export default {
       console.log("Scheduled ingestion is paused; skipping D1 and Turso writes.");
       return;
     }
-    await ingest(env);
+    if (env.DATA_MODE === "turso-primary") {
+      await ingestToTurso(env);
+    } else {
+      await ingest(env);
+    }
   }
 };
