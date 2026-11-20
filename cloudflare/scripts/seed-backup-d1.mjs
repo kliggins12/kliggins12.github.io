@@ -278,6 +278,10 @@ async function copyDraws(maxRows) {
       toWrite = page.filter((row) => !same(row, byId.get(Number(row.id))));
     }
 
+    // Enforce the configured per-run cap even when the next source page is
+    // larger than the remaining allowance. Uncopied rows are found on resume.
+    toWrite = toWrite.slice(0, Math.max(0, maxRows - copied));
+
     if (toWrite.length) {
       // Reserve before issuing the D1 batch. Six writes per draw is above the
       // observed five-write amplification; the 20k daily margin absorbs drift.
@@ -373,10 +377,31 @@ async function verify() {
 
   const mainIds = (await query(PRIMARY, "SELECT COUNT(*) AS row_count,COALESCE(MIN(id),0) AS min_id,COALESCE(MAX(id),0) AS max_id,COALESCE(SUM(id),0) AS id_sum FROM draws")).results?.[0] || {};
   const backupIds = (await query(BACKUP, "SELECT COUNT(*) AS row_count,COALESCE(MIN(id),0) AS min_id,COALESCE(MAX(id),0) AS max_id,COALESCE(SUM(id),0) AS id_sum FROM draws")).results?.[0] || {};
+
+  const mainSources = (await query(PRIMARY, `
+    SELECT filename,source_url,sha256,bytes,row_count,fetched_at,last_modified,etag,r2_key
+    FROM source_files ORDER BY filename
+  `)).results || [];
+  const backupSources = (await query(BACKUP, `
+    SELECT filename,source_url,sha256,bytes,row_count,fetched_at,last_modified,etag,r2_key
+    FROM source_files ORDER BY filename
+  `)).results || [];
+  const mainRuns = (await query(PRIMARY, `
+    SELECT id,started_at,finished_at,status,files_expected,files_updated,error
+    FROM ingestion_runs ORDER BY id
+  `)).results || [];
+  const backupRuns = (await query(BACKUP, `
+    SELECT id,started_at,finished_at,status,files_expected,files_updated,error
+    FROM ingestion_runs ORDER BY id
+  `)).results || [];
+
   const idCoverageMatch = JSON.stringify(mainIds) === JSON.stringify(backupIds);
   const groupsMatch = JSON.stringify(mainGroups) === JSON.stringify(backupGroups);
+  const sourceMetadataMatch = JSON.stringify(mainSources) === JSON.stringify(backupSources);
+  const ingestionMetadataMatch = JSON.stringify(mainRuns) === JSON.stringify(backupRuns);
   return {
     main, backup, sourceGroupsMatch: groupsMatch, idCoverageMatch,
+    sourceMetadataMatch, ingestionMetadataMatch,
     drawDataMatch: main.draws === backup.draws && idCoverageMatch && groupsMatch
   };
 }
@@ -423,6 +448,8 @@ async function main() {
     verification.drawDataMatch &&
     verification.backup.sources === verification.main.sources &&
     verification.backup.runs === verification.main.runs &&
+    verification.sourceMetadataMatch &&
+    verification.ingestionMetadataMatch &&
     sourceMetadata.promoted;
 
   process.stdout.write(JSON.stringify({ metadata, draws, sourceMetadata, verification, complete }, null, 2) + "\\n");
