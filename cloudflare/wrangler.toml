@@ -5,7 +5,7 @@ workers_dev = true
 account_id = "41745143f8e073c6d617c36b04d1b5cd"
 
 [triggers]
-crons = ["*/30 * * * *"]
+crons = []
 
 [[d1_databases]]
 binding = "DB"
