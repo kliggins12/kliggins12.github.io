@@ -321,12 +321,17 @@ async function copyDraws(maxRows) {
     FROM draws
   `)).results?.[0] || {};
   const backupCountAfter = Number(after.row_count || 0);
-  const afterMaxId = Number(after.max_id || 0);
+  const mainIdStats = (await query(PRIMARY, `
+    SELECT COUNT(*) AS row_count,COALESCE(MIN(id),0) AS min_id,
+           COALESCE(MAX(id),0) AS max_id,COALESCE(SUM(id),0) AS id_sum
+    FROM draws
+  `)).results?.[0] || {};
   const coverageMatch =
     backupCountAfter === mainCount &&
-    Number(after.min_id || 0) === (mainCount ? 1 : 0) &&
-    afterMaxId === mainCount &&
-    Number(after.id_sum || 0) === mainCount * (mainCount + 1) / 2;
+    Number(after.row_count || 0) === Number(mainIdStats.row_count || 0) &&
+    Number(after.min_id || 0) === Number(mainIdStats.min_id || 0) &&
+    Number(after.max_id || 0) === Number(mainIdStats.max_id || 0) &&
+    Number(after.id_sum || 0) === Number(mainIdStats.id_sum || 0);
 
   return {
     mainDraws: mainCount,
