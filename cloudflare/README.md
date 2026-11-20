@@ -1,55 +1,96 @@
-# Batchmate Cloudflare backend
+# Batchmate backend and data infrastructure
 
-This is the first infrastructure stage for moving Batchmate and Slotterhouse off the Python/GitHub Actions publishing chain.
+## Target responsibilities
 
-## Architecture
+- **Turso:** authoritative database for all drawing history, source metadata, ingestion runs, NumberLab analysis, Markov artifacts, and board replay data.
+- **Cloudflare Workers:** API runtime, source collection, request validation, caching, security, and service-mode routing.
+- **Cloudflare R2:** immutable versioned CSV archives and compressed database/export snapshots. R2 is file storage, not a second database.
+- **Cloudflare D1:** optional read-only standby only after it has been fully synchronized and independently verified. It is not the normal write target.
+- **GitHub:** source control, tests, schema migrations, build/deployment workflows, and release history. It is not the application's live database.
+- **Website hosting:** currently GitHub Pages. The move to Cloudflare Pages/Workers-hosted static assets remains a later hosting task and must not change the public route until verified.
 
-- Cloudflare Worker: scheduled source collection, parsing, D1 indexing, Turso session synchronization, and read API.
-- D1: ingestion runs, source-file metadata, and canonical indexed drawings for all 17 sources.
-- R2: immutable-by-version-key source CSV archive (current object key per source is updated only after parsing and required database writes succeed).
-- Turso: canonical chronological history for the 12 Pick 3, Daily 4, and All or Nothing session streams.
-- Pages: static Batchmate and NumberLab frontends.
+## Current production boundary
 
-The collector validates all 17 responses as non-empty CSV-like content, hashes each file, skips unchanged sources, and archives changed sources in R2. A changed file is parsed and upserted into D1 before its current-source metadata pointer is advanced. For Pick 3, Daily 4, and All or Nothing, the same parsed rows are also upserted into Turso's 12 session streams. If parsing or the Turso write fails, the current-source pointer is not advanced, so the next scheduled collection retries the file. The previous versioned R2 object remains available.
+The existing Worker still uses D1 for source-file metadata, ingestion runs, and indexed drawing history. It mirrors only the 12 Pick 3, Daily 4, and All or Nothing session feeds to the older Turso `session_draws` table. Batchmate's homepage still uses generated `batchmate_data.json` and `tight_tickets.json` outputs. NumberLab's past-draw history view currently reads the older 12-stream Turso API.
 
-## Important migration boundary
+Production ingestion remains paused and the Worker has no Cron trigger. Do not unpause ingestion, enable Cron, change the live route, deploy a new database adapter, or retire D1 until the complete migration and parity tests pass.
 
-This first stage does **not** yet replace the existing Python analysis algorithms or generate the existing `batchmate_data.json` and `tight_tickets.json` contracts. Those need to be ported and regression-tested before the frontend switches to the new API. The existing Pages app remains unchanged during this stage.
+## Turso schema and all-game history migration
 
-## Cloudflare setup
+The versioned schema files are:
 
-1. Create a D1 database named `batchmate`.
-2. Create an R2 bucket named `batchmate-source-archive`.
-3. Replace the D1 `database_id` placeholder in `wrangler.toml`.
-4. From this directory run `npm install`.
-5. Apply the schema: `npx wrangler d1 migrations apply batchmate --remote`.
-6. Set the manual ingestion token: `npx wrangler secret put API_TOKEN`.
-7. Deploy: `npm run deploy`.
+- `turso/0001_session_history.sql`: the original 12 session streams and board replay tables.
+- `turso/0002_primary_history.sql`: unified `lottery_draws` table for all 17 source files, operational metadata tables, and migration verification ledger.
 
-The Worker cron runs every 30 minutes (UTC). You can also manually trigger ingestion with:
+The new `lottery_draws` table uses `(source_filename, draw_date)` as its key. It preserves game, session, number order, source hash, and import timestamp. The existing `session_draws` table is retained during the compatibility period; it is not dropped by the migration. The same additive schema adds `analysis_artifacts`, a versioned store for the existing Batchmate analysis JSON snapshots.
 
-```sh
-curl -X POST "https://YOUR-WORKER.workers.dev/api/admin/ingest" \
-  -H "Authorization: Bearer YOUR_API_TOKEN"
-```
+Run the schema initializer manually from GitHub Actions **Initialize Batchmate Turso Database** only after confirming the intended Turso database and credentials. The initializer applies both schema files idempotently and verifies the required tables. It does not copy drawing rows.
 
-## API
+The all-game migration is a separate manually dispatched workflow: **Turso primary full-history migration**.
+
+- `report` is read-only. It reads the 17 D1-backed feeds through the existing Worker API, reads the matching Turso rows, and compares row counts plus SHA-256 fingerprints.
+- `import` requires the exact confirmation phrase `IMPORT-ALL-17-SOURCES`. The script then performs idempotent upserts in batches of 100 and verifies every source after writing.
+- The script refuses a missing source, malformed row, duplicate date, wrong source/game/session, non-ISO date, invalid number payload, hash mismatch, or pagination that does not advance.
+- A report/import run records only aggregate counts, fingerprints, and source/date coverage in its output. It does not print lottery number payloads or credentials.
+- Import is not run automatically by a push or deployment.
+
+The first report is expected to reveal how many rows are present in the unified Turso table before any import. A read-only report is the correct next operational check after applying the schema.
+
+The separate manually dispatched workflow **Turso Batchmate analysis artifact migration** validates and compares the two published analysis snapshots. Its `import` mode requires the exact confirmation phrase `IMPORT-ANALYSIS-ARTIFACTS`, retains prior versions, and verifies the imported payload hashes. This is not the drawing-history import and must be run only after the Turso schema has been applied.
+
+## Database migration sequence
+
+1. Confirm the Turso database URL, plan, usage, and overage setting.
+2. Apply the additive schema using the manual schema workflow.
+3. Run the all-game migration in `report` mode and retain the output.
+4. Review source counts and date ranges against all 17 existing D1 sources.
+5. Obtain explicit approval before selecting `import` mode.
+6. Run the idempotent import and require exact per-source fingerprint verification.
+7. Migrate source-file metadata, complete ingestion-run history, model artifacts, analysis notes, Markov outputs, and board replay data; verify keys and hashes.
+8. Add a Turso-first repository/data-access layer to the Worker. Keep D1 only behind a read-only, verified standby adapter.
+9. Migrate the frontend data contracts. Batchmate's existing generated outputs must be reproduced and compared against the current Python outputs before switching the homepage to the API.
+10. Implement cache, quota alerting, primary/backup/maintenance service modes, and failover banner.
+11. Test the D1 standby replication and outage behavior without activating production failover.
+12. Move website hosting only after the pages, routes, assets, ads, and custom-domain behavior are validated.
+
+## Existing API routes
 
 - `GET /health`
 - `GET /api/status`
+- `GET /api/migration/source-files` (Bearer token required; read-only migration export)
+- `GET /api/migration/ingestion-runs?limit=...&before=...` (Bearer token required; read-only migration export)
 - `GET /api/turso/health`
 - `GET /api/session-draws/summary`
 - `GET /api/session-draws?game=...&session=...`
-- `GET /api/sources/:filename` (one of the 17 allowlisted CSV names)
-- `POST /api/admin/reindex?file=...` (Bearer token required; reindexes D1 and mirrors sessioned games into Turso)
-- `POST /api/admin/ingest` (Bearer token required; changed files are parsed and synchronized before metadata advances)
+- `GET /api/primary/draws/summary` (all 17 Turso feeds)
+- `GET /api/primary/draws/latest` (latest draw per source)
+- `GET /api/primary/analysis` (latest verified Batchmate analysis snapshots)
+- `POST /api/primary/admin/ingest` (Bearer token required; refuses until full-history migration verification passes)
+- `POST /api/primary/admin/reindex?file=...` (Bearer token required; Turso-only reindex of one archived source)
+- `GET /api/primary/draws?game=...&session=...&limit=...` (all-game history with date/source cursor)
+- `GET /api/sources/:filename`
+- `GET /api/draws/latest`
+- `GET /api/draws?game=...&session=...`
+- `POST /api/admin/reindex?file=...` (Bearer token required)
+- `POST /api/admin/ingest` (Bearer token required)
 
-## Next migration milestones
+The existing `/api/draws` route is the read-only migration source for the 17-feed copy. It still reads D1 at this stage and is not the final public history API.
 
-1. Inspect and fixture-test each of the 17 CSV schemas.
-2. Port date/number parsing into TypeScript with game/session provenance.
-3. Build idempotent draw records in D1 while retaining raw CSVs in R2.
-4. Port Batchmate's analysis engine and compare output against known Python outputs.
-5. Add Slotterhouse journal, exact-position shapes, transitions, and assumptions on the shared draw store.
-6. Switch frontend reads to the Worker API only after parity tests pass.
-7. Move static hosting to Cloudflare Pages and verify AdSense and all routes before changing DNS or the public URL.
+## Deployment and operations
+
+- Worker configuration: `wrangler.toml`
+- Worker deployment workflow: `.github/workflows/deploy-worker.yml`
+- Schema initialization workflow: `.github/workflows/migrate-turso.yml`
+- Full-history migration workflow: `.github/workflows/turso-primary-full-history.yml`
+- Analysis artifact migration workflow: `.github/workflows/turso-analysis-artifacts.yml`
+- Turso is configured as the future ingestion target via `DATA_MODE = "turso-primary"`; production ingestion remains paused via `INGEST_PAUSED = "true"` and an empty Cron list.
+- The new Turso-first collector is a code path only; it has not been run against live data.
+
+
+## Website integration status
+
+The implementation branch changes the Batchmate homepage to try Turso analysis snapshots first, then fall back to the public generated JSON snapshots. It prefers Turso's latest-drawing endpoint and retains the existing Worker/D1 route as fallback. The NumberLab page uses the all-game history endpoints only when all 17 expected feeds are present and non-empty; otherwise it clearly labels the 12-stream session-history fallback. Its current journal/comparison/frequency screens describe observed history and do not claim to predict future results.
+
+The analysis snapshot import has not been run. Until the additive Turso schema and artifact migration are run and verified, Batchmate continues to use the published JSON fallback. These site changes are not deployed to the production branch.
+
+No existing Markov/model artifact files were found in the scanned Batchmate and website GitHub repository trees. This does not prove there are no such artifacts in another store; inspect the existing Turso database and any external storage before treating the model inventory as complete.

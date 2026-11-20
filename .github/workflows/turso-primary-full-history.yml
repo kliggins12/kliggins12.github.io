@@ -1,0 +1,79 @@
+name: Turso primary full-history migration
+
+on:
+  workflow_dispatch:
+    inputs:
+      mode:
+        description: "Run a read-only comparison or import all 17 source histories"
+        required: true
+        type: choice
+        options:
+          - report
+          - import
+        default: report
+      confirmation:
+        description: "For import only, enter exactly: IMPORT-ALL-17-SOURCES"
+        required: false
+        type: string
+        default: ""
+
+concurrency:
+  group: turso-primary-full-history-import
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  migrate:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Install migration dependencies
+        working-directory: cloudflare
+        run: npm install
+
+      - name: Validate migration script and tests
+        working-directory: cloudflare
+        run: |
+          node --check scripts/migrate-full-history.mjs
+          node --test test/full-history-migration.test.mjs
+
+      - name: Run read-only source comparison
+        if: inputs.mode == 'report'
+        working-directory: cloudflare
+        env:
+          WORKER_URL: https://batchmate-data.kamika-us.workers.dev
+          TURSO_DATABASE_URL: ${{ secrets.TURSO_DATABASE_URL }}
+          TURSO_AUTH_TOKEN: ${{ secrets.TURSO_AUTH_TOKEN }}
+          API_TOKEN: ${{ secrets.API_TOKEN }}
+        run: node scripts/migrate-full-history.mjs
+
+      - name: Require explicit import confirmation
+        if: inputs.mode == 'import'
+        env:
+          CONFIRMATION: ${{ inputs.confirmation }}
+        run: |
+          set -euo pipefail
+          test "$CONFIRMATION" = "IMPORT-ALL-17-SOURCES" || {
+            echo "Import blocked. Enter the exact confirmation phrase."
+            exit 1
+          }
+
+      - name: Import and verify all 17 sources in Turso
+        if: inputs.mode == 'import'
+        working-directory: cloudflare
+        env:
+          WORKER_URL: https://batchmate-data.kamika-us.workers.dev
+          TURSO_DATABASE_URL: ${{ secrets.TURSO_DATABASE_URL }}
+          TURSO_AUTH_TOKEN: ${{ secrets.TURSO_AUTH_TOKEN }}
+          API_TOKEN: ${{ secrets.API_TOKEN }}
+          CONFIRM_PRIMARY_IMPORT: ${{ inputs.confirmation }}
+        run: node scripts/migrate-full-history.mjs --apply

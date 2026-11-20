@@ -3,6 +3,10 @@ name: Apply Batchmate Board Replay Schema
 on:
   workflow_dispatch:
 
+concurrency:
+  group: batchmate-d1-schema
+  cancel-in-progress: false
+
 permissions:
   contents: read
 

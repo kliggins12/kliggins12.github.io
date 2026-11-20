@@ -1,0 +1,76 @@
+name: Turso Batchmate analysis artifact migration
+
+on:
+  workflow_dispatch:
+    inputs:
+      mode:
+        description: "Compare the current snapshots or import them into Turso"
+        required: true
+        type: choice
+        options:
+          - report
+          - import
+        default: report
+      confirmation:
+        description: "For import only, enter exactly: IMPORT-ANALYSIS-ARTIFACTS"
+        required: false
+        type: string
+        default: ""
+
+concurrency:
+  group: turso-analysis-artifact-import
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  migrate:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Install migration dependencies
+        working-directory: cloudflare
+        run: npm install
+
+      - name: Validate artifact migration scripts
+        working-directory: cloudflare
+        run: |
+          node --check scripts/lib/analysis-artifacts.mjs
+          node --check scripts/migrate-analysis-artifacts.mjs
+          node --test test/analysis-artifacts.test.mjs
+
+      - name: Run read-only artifact comparison
+        if: inputs.mode == 'report'
+        working-directory: cloudflare
+        env:
+          TURSO_DATABASE_URL: ${{ secrets.TURSO_DATABASE_URL }}
+          TURSO_AUTH_TOKEN: ${{ secrets.TURSO_AUTH_TOKEN }}
+        run: node scripts/migrate-analysis-artifacts.mjs
+
+      - name: Require explicit import confirmation
+        if: inputs.mode == 'import'
+        env:
+          CONFIRMATION: ${{ inputs.confirmation }}
+        run: |
+          set -euo pipefail
+          test "$CONFIRMATION" = "IMPORT-ANALYSIS-ARTIFACTS" || {
+            echo "Import blocked. Enter the exact confirmation phrase."
+            exit 1
+          }
+
+      - name: Import and verify both analysis snapshots
+        if: inputs.mode == 'import'
+        working-directory: cloudflare
+        env:
+          TURSO_DATABASE_URL: ${{ secrets.TURSO_DATABASE_URL }}
+          TURSO_AUTH_TOKEN: ${{ secrets.TURSO_AUTH_TOKEN }}
+          CONFIRM_ANALYSIS_IMPORT: ${{ inputs.confirmation }}
+        run: node scripts/migrate-analysis-artifacts.mjs --apply

@@ -3,6 +3,10 @@ name: Initialize Batchmate Turso Database
 on:
   workflow_dispatch:
 
+concurrency:
+  group: batchmate-turso-schema
+  cancel-in-progress: false
+
 permissions:
   contents: read
 

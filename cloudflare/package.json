@@ -4,9 +4,10 @@
   "type": "module",
   "scripts": {
     "dev": "wrangler dev",
+    "migrate:full-history": "node scripts/migrate-full-history.mjs",
     "deploy": "wrangler deploy",
     "typecheck": "tsc --noEmit",
-    "test": "rm -rf /tmp/batchmate-pick3-test-build && tsc src/analysis/pick3.ts src/analysis/pick3-movements.ts src/analysis/pick3-replay.ts src/ingestion/delta.ts --target ES2022 --module commonjs --moduleResolution node --rootDir src --outDir /tmp/batchmate-pick3-test-build --skipLibCheck && PICK3_BUILD_DIR=/tmp/batchmate-pick3-test-build INGESTION_BUILD_DIR=/tmp/batchmate-pick3-test-build node --test test/pick3.test.cjs test/ingestion-delta.test.cjs"
+    "test": "rm -rf /tmp/batchmate-pick3-test-build && tsc src/analysis/pick3.ts src/analysis/pick3-movements.ts src/analysis/pick3-replay.ts src/ingestion/delta.ts --target ES2022 --module commonjs --moduleResolution node --rootDir src --outDir /tmp/batchmate-pick3-test-build --skipLibCheck && PICK3_BUILD_DIR=/tmp/batchmate-pick3-test-build INGESTION_BUILD_DIR=/tmp/batchmate-pick3-test-build node --test test/pick3.test.cjs test/ingestion-delta.test.cjs test/full-history-migration.test.mjs test/numberlab-app.test.mjs test/analysis-artifacts.test.mjs test/website-integration.test.mjs"
   },
   "devDependencies": {
     "@cloudflare/workers-types": "^5.20261118.1",

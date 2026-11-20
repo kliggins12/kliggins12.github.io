@@ -8,6 +8,7 @@ interface Env {
   ARCHIVE: R2Bucket;
   API_TOKEN?: string;
   INGEST_PAUSED?: string;
+  DATA_MODE?: "legacy-d1" | "turso-primary";
 }
 
 type Source = { filename: string; url: string; game: string; session: string };
@@ -356,11 +357,346 @@ async function ingest(env: Env): Promise<{
   return { updated, unchanged, checked, skipped: false, errors };
 }
 
+
+// Turso-primary source ingestion. This path writes canonical drawings,
+// source metadata, and operational history to Turso only. It does not write
+// to D1. Raw CSV versions remain in R2 for recovery and audit.
+async function assertPrimaryHistoryVerified(env: Env): Promise<{
+  migrationKey: string;
+  runId: string;
+  verifiedAt: string;
+  drawCount: number;
+}> {
+  const db = getTursoClient(env);
+  const result = await db.execute({
+    sql: `SELECT run_id,migration_key,started_at,finished_at,status,source_count,
+                 draws_expected,draws_verified,source_files_expected,source_files_verified,
+                 ingestion_runs_expected,ingestion_runs_verified
+          FROM migration_runs
+          WHERE migration_key='primary-history-v1'
+          ORDER BY started_at DESC
+          LIMIT 1`
+  });
+  if (!result.rows.length) {
+    throw new Error("The complete 17-source Turso history has not been migrated and verified.");
+  }
+
+  const run = result.rows[0];
+  const sourceCount = Number(run.source_count);
+  const drawsExpected = Number(run.draws_expected);
+  const drawsVerified = Number(run.draws_verified);
+  const sourceFilesExpected = Number(run.source_files_expected);
+  const sourceFilesVerified = Number(run.source_files_verified);
+  const ingestionRunsExpected = Number(run.ingestion_runs_expected);
+  const ingestionRunsVerified = Number(run.ingestion_runs_verified);
+
+  if (String(run.status) !== "success" ||
+      sourceCount !== TX.length ||
+      drawsExpected <= 0 ||
+      drawsVerified !== drawsExpected ||
+      sourceFilesExpected !== TX.length ||
+      sourceFilesVerified !== TX.length ||
+      ingestionRunsExpected !== ingestionRunsVerified) {
+    throw new Error("The latest Turso primary-history migration did not pass exact verification.");
+  }
+
+  const progress = await db.execute({
+    sql: `SELECT COUNT(*) AS complete_sources
+          FROM migration_source_progress
+          WHERE migration_key='primary-history-v1' AND status='complete'`
+  });
+  const completeSources = Number(progress.rows[0]?.complete_sources ?? 0);
+  if (completeSources !== TX.length) {
+    throw new Error(`Turso primary-history verification covers ${completeSources} of ${TX.length} sources.`);
+  }
+
+  return {
+    migrationKey: String(run.migration_key),
+    runId: String(run.run_id),
+    verifiedAt: String(run.finished_at ?? run.started_at),
+    drawCount: drawsVerified
+  };
+}
+
+async function reindexSourceToTurso(
+  env: Env,
+  source: Source,
+  archived: { r2_key: string; sha256: string },
+  csvText?: string
+): Promise<{ filename: string; parsed: number; imported: number; unchanged: number }> {
+  const objectText = csvText ?? await (async () => {
+    const object = await env.ARCHIVE.get(archived.r2_key);
+    if (!object) throw new Error(`Archived CSV is missing for ${source.filename}`);
+    return await object.text();
+  })();
+
+  const draws = parseSourceDraws(objectText, source);
+  if (draws.length === 0) {
+    throw new Error(`No valid drawing rows parsed from ${source.filename}; existing history was left unchanged.`);
+  }
+
+  const db = getTursoClient(env);
+  const existingResult = await db.execute({
+    sql: `SELECT draw_date,game,session,numbers_json
+          FROM lottery_draws WHERE source_filename=?`,
+    args: [source.filename]
+  });
+  const existing = existingResult.rows.map((row) => ({
+    draw_date: String(row.draw_date),
+    game: String(row.game),
+    session: String(row.session),
+    numbers_json: String(row.numbers_json)
+  }));
+  const changes = selectChangedDraws(
+    draws,
+    existing,
+    { game: source.game, session: source.session }
+  );
+  const importedAt = new Date().toISOString();
+  const insertSql = `INSERT INTO lottery_draws
+    (source_filename,game,session,draw_date,numbers_json,source_sha256,imported_at)
+    VALUES(?,?,?,?,?,?,?)
+    ON CONFLICT(source_filename,draw_date) DO UPDATE SET
+      game=excluded.game,
+      session=excluded.session,
+      numbers_json=excluded.numbers_json,
+      source_sha256=excluded.source_sha256,
+      imported_at=excluded.imported_at
+    WHERE lottery_draws.game IS NOT excluded.game
+       OR lottery_draws.session IS NOT excluded.session
+       OR lottery_draws.numbers_json IS NOT excluded.numbers_json
+       OR lottery_draws.source_sha256 IS NOT excluded.source_sha256
+       OR lottery_draws.imported_at IS NOT excluded.imported_at`;
+
+  for (let offset = 0; offset < changes.length; offset += 100) {
+    const batch = changes.slice(offset, offset + 100).map((draw) => ({
+      sql: insertSql,
+      args: [
+        source.filename,
+        source.game,
+        source.session,
+        draw.drawDate,
+        JSON.stringify(draw.numbers),
+        archived.sha256,
+        importedAt
+      ]
+    }));
+    await db.batch(batch, "write");
+  }
+
+  return {
+    filename: source.filename,
+    parsed: draws.length,
+    imported: changes.length,
+    unchanged: draws.length - changes.length
+  };
+}
+
+async function upsertTursoSourceMetadata(
+  env: Env,
+  source: Source,
+  bytes: number,
+  rows: number,
+  sha256: string,
+  r2Key: string,
+  lastModified: string | null,
+  etag: string | null
+): Promise<void> {
+  const db = getTursoClient(env);
+  const fetchedAt = new Date().toISOString();
+  await db.execute({
+    sql: `INSERT INTO source_files
+      (filename,source_url,sha256,bytes,row_count,fetched_at,last_modified,etag,r2_key)
+      VALUES(?,?,?,?,?,?,?,?,?)
+      ON CONFLICT(filename) DO UPDATE SET
+        source_url=excluded.source_url,
+        sha256=excluded.sha256,
+        bytes=excluded.bytes,
+        row_count=excluded.row_count,
+        fetched_at=excluded.fetched_at,
+        last_modified=excluded.last_modified,
+        etag=excluded.etag,
+        r2_key=excluded.r2_key
+      WHERE source_files.source_url IS NOT excluded.source_url
+         OR source_files.sha256 IS NOT excluded.sha256
+         OR source_files.bytes IS NOT excluded.bytes
+         OR source_files.row_count IS NOT excluded.row_count
+         OR source_files.fetched_at IS NOT excluded.fetched_at
+         OR source_files.last_modified IS NOT excluded.last_modified
+         OR source_files.etag IS NOT excluded.etag
+         OR source_files.r2_key IS NOT excluded.r2_key`,
+    args: [
+      source.filename,
+      source.url,
+      sha256,
+      bytes,
+      rows,
+      fetchedAt,
+      lastModified,
+      etag,
+      r2Key
+    ]
+  });
+}
+
+async function ingestToTurso(env: Env): Promise<{
+  updated: number;
+  unchanged: number;
+  checked: number;
+  skipped: boolean;
+  status: "success" | "partial" | "failed" | "skipped";
+  errors: string[];
+}> {
+  type Candidate = {
+    source: Source;
+    text: string;
+    bytes: Uint8Array;
+    hash: string;
+    lastModified: string | null;
+    etag: string | null;
+  };
+
+  await assertPrimaryHistoryVerified(env);
+  const db = getTursoClient(env);
+  const priorResult = await db.execute("SELECT filename,sha256 FROM source_files");
+  const priorHashes = new Map(priorResult.rows.map((row) => [
+    String(row.filename),
+    String(row.sha256)
+  ]));
+
+  const candidates: Candidate[] = [];
+  const errors: string[] = [];
+  let unchanged = 0;
+  let checked = 0;
+
+  // Fetch and validate every source before creating the run record. A failed
+  // or identical source does not advance its source metadata pointer.
+  for (const source of TX) {
+    try {
+      const response = await fetch(source.url, {
+        headers: { "user-agent": "BatchmateDataCollector/1.0 (historical lottery data)" },
+        signal: AbortSignal.timeout(55000)
+      });
+      if (!response.ok) throw new Error(`HTTP ${response.status}`);
+      const text = await response.text();
+      if (!text.trim() || /^\s*<(?:!doctype\s+html|html)/i.test(text)) {
+        throw new Error("Empty response or HTML returned instead of CSV");
+      }
+      if (!text.includes("\n") || !text.includes(",")) {
+        throw new Error("Response does not look like CSV");
+      }
+
+      const bytes = new TextEncoder().encode(text);
+      const hash = await sha256Hex(bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength) as ArrayBuffer);
+      checked++;
+      if (isSourceHashUnchanged(priorHashes.get(source.filename), hash)) {
+        unchanged++;
+        continue;
+      }
+
+      // Parse once here so an invalid file cannot be archived as a new
+      // current version or create a partially valid drawing import.
+      const parsed = parseSourceDraws(text, source);
+      if (!parsed.length) throw new Error("No valid drawing rows parsed from CSV");
+
+      candidates.push({
+        source,
+        text,
+        bytes,
+        hash,
+        lastModified: response.headers.get("last-modified"),
+        etag: response.headers.get("etag")
+      });
+    } catch (error) {
+      errors.push(`${source.filename}: ${error instanceof Error ? error.message : String(error)}`);
+    }
+  }
+
+  if (candidates.length === 0 && errors.length === 0) {
+    console.log(`Turso source check complete: ${checked} checked, ${unchanged} unchanged; zero database writes.`);
+    return { updated: 0, unchanged, checked, skipped: true, status: "skipped", errors };
+  }
+
+  // Use an explicit integer key so the copied D1 run IDs can be preserved.
+  // The range stays within SQLite's signed 64-bit INTEGER and JS safe integer.
+  const startedAt = new Date().toISOString();
+  const runId = Date.now() * 1000 + Math.floor(Math.random() * 1000);
+  await db.execute({
+    sql: `INSERT INTO ingestion_runs
+      (id,started_at,status,files_expected,files_updated,error)
+      VALUES(?,?,?,?,0,?)`,
+    args: [runId, startedAt, "running", TX.length, errors.join("\n") || null]
+  });
+
+  let updated = 0;
+  for (const candidate of candidates) {
+    const { source, text, bytes, hash, lastModified, etag } = candidate;
+    try {
+      const key = `sources/${source.filename}/${hash}.csv`;
+      await env.ARCHIVE.put(key, bytes, {
+        httpMetadata: { contentType: "text/csv; charset=utf-8" },
+        customMetadata: { game: source.game, session: source.session, sha256: hash }
+      });
+
+      const result = await reindexSourceToTurso(
+        env,
+        source,
+        { r2_key: key, sha256: hash },
+        text
+      );
+      await upsertTursoSourceMetadata(
+        env,
+        source,
+        bytes.byteLength,
+        csvRowCount(text),
+        hash,
+        key,
+        lastModified,
+        etag
+      );
+      updated++;
+      console.log(`Turso imported ${source.filename}: ${result.imported} changed, ${result.unchanged} unchanged.`);
+    } catch (error) {
+      errors.push(`${source.filename}: ${error instanceof Error ? error.message : String(error)}`);
+    }
+  }
+
+  const status = errors.length === 0 ? "success" : updated > 0 ? "partial" : "failed";
+  await db.execute({
+    sql: "UPDATE ingestion_runs SET finished_at=?,status=?,files_updated=?,error=? WHERE id=?",
+    args: [new Date().toISOString(), status, updated, errors.join("\n") || null, runId]
+  });
+
+  return {
+    updated,
+    unchanged,
+    checked,
+    skipped: false,
+    status,
+    errors
+  };
+}
+
 export default {
   async fetch(request: Request, env: Env): Promise<Response> {
     const url = new URL(request.url);
     if (request.method === "OPTIONS") return new Response(null, { status: 204, headers: CORS_HEADERS });
     if (url.pathname === "/health") return json({ ok: true, service: "batchmate-data", time: new Date().toISOString() });
+
+    // Keep every manual write behind the same pause switch as scheduled ingestion.
+    // Legacy D1 writers are disabled entirely while Turso is the primary database.
+    const isAdminWrite = request.method === "POST" && [
+      "/api/primary/admin/ingest",
+      "/api/primary/admin/reindex",
+      "/api/admin/reindex",
+      "/api/admin/ingest"
+    ].includes(url.pathname);
+    if (isAdminWrite && env.INGEST_PAUSED === "true") {
+      return json({ error: "Ingestion is paused; database writes are disabled." }, 423);
+    }
+    if (isAdminWrite && url.pathname.startsWith("/api/admin/") && env.DATA_MODE === "turso-primary") {
+      return json({ error: "Legacy D1 write routes are disabled while Turso is primary." }, 409);
+    }
 
     if (url.pathname === "/api/turso/health") {
       try {
@@ -372,6 +708,255 @@ export default {
           database: "turso",
           connected: false,
           error: error instanceof Error ? error.message : "Connection failed"
+        }, 503);
+      }
+    }
+
+    // Unified all-game read API. These routes read only from Turso's
+    // lottery_draws table; they remain unused by the public frontend until
+    // the full-history migration has been verified and cutover is approved.
+    if (url.pathname === "/api/primary/analysis") {
+      try {
+        const verifiedHistory = await assertPrimaryHistoryVerified(env);
+        const db = getTursoClient(env);
+        const result = await db.execute(
+          "SELECT artifact_key,payload_json,payload_sha256,generated_at,payload_bytes,imported_at " +
+          "FROM analysis_artifacts WHERE artifact_key IN ('batchmate_data','tight_tickets') " +
+          "ORDER BY artifact_key,generated_at DESC"
+        );
+        const artifacts = new Map();
+        for (const row of result.rows) {
+          const key = String(row.artifact_key);
+          if (!artifacts.has(key)) artifacts.set(key, row);
+        }
+        const batchmateRow = artifacts.get("batchmate_data");
+        const tightRow = artifacts.get("tight_tickets");
+        if (!batchmateRow || !tightRow) {
+          return json({
+            ok: false,
+            storage: "turso-primary",
+            error: "The latest Batchmate analysis snapshots have not been imported yet."
+          }, 503);
+        }
+
+        const batchmateText = String(batchmateRow.payload_json);
+        const tightText = String(tightRow.payload_json);
+        const batchmateBytes = new TextEncoder().encode(batchmateText);
+        const tightBytes = new TextEncoder().encode(tightText);
+        const batchmateHash = await sha256Hex(
+          batchmateBytes.buffer.slice(batchmateBytes.byteOffset, batchmateBytes.byteOffset + batchmateBytes.byteLength) as ArrayBuffer
+        );
+        const tightHash = await sha256Hex(
+          tightBytes.buffer.slice(tightBytes.byteOffset, tightBytes.byteOffset + tightBytes.byteLength) as ArrayBuffer
+        );
+        if (batchmateHash !== String(batchmateRow.payload_sha256) ||
+            tightHash !== String(tightRow.payload_sha256)) {
+          return json({
+            ok: false,
+            storage: "turso-primary",
+            error: "The stored analysis snapshots failed their integrity check."
+          }, 503);
+        }
+
+        const batchmateData = JSON.parse(batchmateText);
+        const tightTickets = JSON.parse(tightText);
+        if (!batchmateData || !Array.isArray(batchmateData.games) ||
+            !tightTickets || !Array.isArray(tightTickets.tickets) ||
+            !Array.isArray(tightTickets.latest_draws)) {
+          return json({
+            ok: false,
+            storage: "turso-primary",
+            error: "The stored analysis snapshots do not match the expected data format."
+          }, 503);
+        }
+
+        return json({
+          ok: true,
+          storage: "turso-primary",
+          migration: verifiedHistory,
+          artifacts: {
+            batchmate_data: {
+              generated_at: String(batchmateRow.generated_at),
+              sha256: batchmateHash,
+              bytes: Number(batchmateRow.payload_bytes)
+            },
+            tight_tickets: {
+              generated_at: String(tightRow.generated_at),
+              sha256: tightHash,
+              bytes: Number(tightRow.payload_bytes)
+            }
+          },
+          batchmate_data: batchmateData,
+          tight_tickets: tightTickets
+        });
+      } catch (error) {
+        return json({
+          ok: false,
+          storage: "turso-primary",
+          error: error instanceof Error ? error.message : "Analysis snapshots are unavailable"
+        }, 503);
+      }
+    }
+
+    if (url.pathname === "/api/primary/draws/summary") {
+      try {
+        const verifiedHistory = await assertPrimaryHistoryVerified(env);
+        const db = getTursoClient(env);
+        const result = await db.execute(`
+          SELECT game, session, COUNT(*) AS draw_count,
+                 MIN(draw_date) AS first_draw_date,
+                 MAX(draw_date) AS last_draw_date
+          FROM lottery_draws
+          GROUP BY game, session
+          ORDER BY game, session
+        `);
+        const streams = result.rows.map((row) => ({
+          game: String(row.game),
+          session: String(row.session),
+          draw_count: Number(row.draw_count),
+          first_draw_date: String(row.first_draw_date),
+          last_draw_date: String(row.last_draw_date)
+        }));
+        return json({
+          ok: true,
+          storage: "turso-primary",
+          migration: verifiedHistory,
+          streamCount: streams.length,
+          drawCount: streams.reduce((sum, stream) => sum + stream.draw_count, 0),
+          streams
+        });
+      } catch (error) {
+        return json({
+          ok: false,
+          storage: "turso-primary",
+          error: error instanceof Error ? error.message : "Primary history summary unavailable"
+        }, 503);
+      }
+    }
+
+    if (url.pathname === "/api/primary/draws/latest") {
+      try {
+        const verifiedHistory = await assertPrimaryHistoryVerified(env);
+        const db = getTursoClient(env);
+        const result = await db.execute(`
+          SELECT d.source_filename, d.game, d.session, d.draw_date, d.numbers_json
+          FROM lottery_draws d
+          INNER JOIN (
+            SELECT source_filename, MAX(draw_date) AS max_date
+            FROM lottery_draws
+            GROUP BY source_filename
+          ) latest
+            ON latest.source_filename=d.source_filename
+           AND latest.max_date=d.draw_date
+          ORDER BY d.game, d.session, d.draw_date DESC
+        `);
+        const draws = result.rows.map((row) => ({
+          source_filename: String(row.source_filename),
+          game: String(row.game),
+          session: String(row.session),
+          draw_date: String(row.draw_date),
+          numbers_json: String(row.numbers_json)
+        }));
+        return json({ ok: true, storage: "turso-primary", migration: verifiedHistory, count: draws.length, draws });
+      } catch (error) {
+        return json({
+          ok: false,
+          storage: "turso-primary",
+          error: error instanceof Error ? error.message : "Primary latest drawings unavailable"
+        }, 503);
+      }
+    }
+
+    if (url.pathname === "/api/primary/draws") {
+      const game = url.searchParams.get("game");
+      const session = url.searchParams.get("session");
+      const sourceFilename = url.searchParams.get("source");
+      const before = url.searchParams.get("before");
+      const allowedGames = new Set(TX.map((source) => source.game));
+      const validSources = new Map(TX.map((source) => [
+        source.filename,
+        { game: source.game, session: source.session }
+      ]));
+
+      if (game && !allowedGames.has(game)) {
+        return json({ error: "Unsupported game." }, 400);
+      }
+      if (sourceFilename && !validSources.has(sourceFilename)) {
+        return json({ error: "Unsupported source file." }, 400);
+      }
+      if (session && !TX.some((source) => source.session === session && (!game || source.game === game))) {
+        return json({ error: "Unsupported session for this game." }, 400);
+      }
+      if (sourceFilename) {
+        const source = validSources.get(sourceFilename)!;
+        if ((game && source.game !== game) || (session && source.session !== session)) {
+          return json({ error: "Source file does not match the requested game/session." }, 400);
+        }
+      }
+      const beforeSource = url.searchParams.get("beforeSource");
+      if (before) {
+        const dateValue = new Date(before + "T00:00:00.000Z");
+        const validDate = /^\d{4}-\d{2}-\d{2}$/.test(before) &&
+          Number.isFinite(dateValue.getTime()) &&
+          dateValue.toISOString().slice(0, 10) === before;
+        if (!validDate) return json({ error: "before must be a real YYYY-MM-DD date." }, 400);
+      }
+      if (beforeSource && !validSources.has(beforeSource)) {
+        return json({ error: "beforeSource must be a supported source filename." }, 400);
+      }
+      if (beforeSource && !before) {
+        return json({ error: "beforeSource requires before." }, 400);
+      }
+
+      const parsedLimit = Number(url.searchParams.get("limit") || 100);
+      const limit = Number.isFinite(parsedLimit) ? Math.min(500, Math.max(1, Math.trunc(parsedLimit))) : 100;
+      const clauses: string[] = [];
+      const args: (string | number)[] = [];
+      if (game) { clauses.push("game=?"); args.push(game); }
+      if (session) { clauses.push("session=?"); args.push(session); }
+      if (sourceFilename) { clauses.push("source_filename=?"); args.push(sourceFilename); }
+      if (before && beforeSource) {
+        clauses.push("(draw_date<? OR (draw_date=? AND source_filename>?))");
+        args.push(before, before, beforeSource);
+      } else if (before) {
+        clauses.push("draw_date<?");
+        args.push(before);
+      }
+
+      try {
+        const verifiedHistory = await assertPrimaryHistoryVerified(env);
+        const db = getTursoClient(env);
+        const result = await db.execute({
+          sql: `SELECT source_filename,game,session,draw_date,numbers_json,source_sha256,imported_at
+                FROM lottery_draws
+                ${clauses.length ? "WHERE " + clauses.join(" AND ") : ""}
+                ORDER BY draw_date DESC,source_filename ASC
+                LIMIT ?`,
+          args: [...args, limit]
+        });
+        const draws = result.rows.map((row) => ({
+          source_filename: String(row.source_filename),
+          game: String(row.game),
+          session: String(row.session),
+          draw_date: String(row.draw_date),
+          numbers_json: String(row.numbers_json),
+          source_sha256: String(row.source_sha256),
+          imported_at: String(row.imported_at)
+        }));
+        return json({
+          ok: true,
+          storage: "turso-primary",
+          migration: verifiedHistory,
+          count: draws.length,
+          draws,
+          nextBefore: draws.length === limit ? draws[draws.length - 1].draw_date : null,
+          nextBeforeSource: draws.length === limit ? draws[draws.length - 1].source_filename : null
+        });
+      } catch (error) {
+        return json({
+          ok: false,
+          storage: "turso-primary",
+          error: error instanceof Error ? error.message : "Primary drawing history unavailable"
         }, 503);
       }
     }
@@ -417,7 +1002,7 @@ export default {
       if (!allowedGames.includes(game) || !allowedSessions.includes(session)) {
         return json({ error: "Supply a supported game and session." }, 400);
       }
-      if (after && !/^\\d{4}-\\d{2}-\\d{2}$/.test(after)) {
+      if (after && !/^\d{4}-\d{2}-\d{2}$/.test(after)) {
         return json({ error: "after must be YYYY-MM-DD." }, 400);
       }
       const limit = Math.min(1000, Math.max(1, Number(url.searchParams.get("limit") || 500)));
@@ -450,6 +1035,81 @@ export default {
         });
       } catch (error) {
         return json({ ok: false, storage: "turso", error: error instanceof Error ? error.message : "History query failed" }, 503);
+      }
+    }
+
+    // Read-only D1 export endpoints used only during the Turso migration.
+    // They do not write to D1 and are not the public application data API.
+    if (url.pathname === "/api/migration/source-files") {
+      const migrationToken = request.headers.get("authorization");
+      if (!env.API_TOKEN || migrationToken !== `Bearer ${env.API_TOKEN}`) {
+        return json({ error: "Unauthorized" }, 401);
+      }
+
+      try {
+        const result = await env.DB.prepare(`
+          SELECT filename,source_url,sha256,bytes,row_count,fetched_at,
+                 last_modified,etag,r2_key
+          FROM source_files
+          ORDER BY filename
+        `).all();
+        return json({
+          ok: true,
+          storage: "cloudflare-d1-migration-source",
+          count: result.results.length,
+          sources: result.results
+        });
+      } catch (error) {
+        return json({
+          ok: false,
+          error: error instanceof Error ? error.message : "Source metadata export failed"
+        }, 503);
+      }
+    }
+
+    if (url.pathname === "/api/migration/ingestion-runs") {
+      const migrationToken = request.headers.get("authorization");
+      if (!env.API_TOKEN || migrationToken !== `Bearer ${env.API_TOKEN}`) {
+        return json({ error: "Unauthorized" }, 401);
+      }
+
+      const beforeValue = url.searchParams.get("before");
+      const before = beforeValue === null ? 0 : Number(beforeValue);
+      if (beforeValue !== null && (!Number.isSafeInteger(before) || before <= 0)) {
+        return json({ error: "before must be a positive ingestion run ID." }, 400);
+      }
+      const requestedLimit = Number(url.searchParams.get("limit") || 100);
+      const limit = Number.isFinite(requestedLimit)
+        ? Math.min(200, Math.max(1, Math.trunc(requestedLimit)))
+        : 100;
+      try {
+        const result = beforeValue === null
+          ? await env.DB.prepare(`
+              SELECT id,started_at,finished_at,status,files_expected,files_updated,error
+              FROM ingestion_runs
+              ORDER BY id DESC
+              LIMIT ?
+            `).bind(limit).all()
+          : await env.DB.prepare(`
+              SELECT id,started_at,finished_at,status,files_expected,files_updated,error
+              FROM ingestion_runs
+              WHERE id < ?
+              ORDER BY id DESC
+              LIMIT ?
+            `).bind(before, limit).all();
+        const runs = result.results;
+        return json({
+          ok: true,
+          storage: "cloudflare-d1-migration-source",
+          count: runs.length,
+          runs,
+          nextBefore: runs.length === limit ? Number(runs[runs.length - 1].id) : null
+        });
+      } catch (error) {
+        return json({
+          ok: false,
+          error: error instanceof Error ? error.message : "Ingestion metadata export failed"
+        }, 503);
       }
     }
 
@@ -520,6 +1180,49 @@ export default {
       return json({ count: result.results.length, draws: result.results });
     }
 
+    // Explicit Turso-primary administrative writes. These endpoints are
+    // token-protected and are separate from the legacy D1 collector routes.
+    if (url.pathname === "/api/primary/admin/ingest" && request.method === "POST") {
+      const token = request.headers.get("authorization");
+      if (!env.API_TOKEN || token !== `Bearer ${env.API_TOKEN}`) return json({ error: "Unauthorized" }, 401);
+      try {
+        const result = await ingestToTurso(env);
+        const statusCode = result.status === "partial" ? 207 : result.status === "failed" ? 502 : 200;
+        return json({ ok: result.status === "success" || result.status === "skipped", storage: "turso-primary", ...result }, statusCode);
+      } catch (error) {
+        return json({
+          ok: false,
+          storage: "turso-primary",
+          error: error instanceof Error ? error.message : "Turso ingestion failed"
+        }, 502);
+      }
+    }
+
+    if (url.pathname === "/api/primary/admin/reindex" && request.method === "POST") {
+      const token = request.headers.get("authorization");
+      if (!env.API_TOKEN || token !== `Bearer ${env.API_TOKEN}`) return json({ error: "Unauthorized" }, 401);
+      const filename = url.searchParams.get("file");
+      const source = TX.find((item) => item.filename === filename);
+      if (!source) return json({ error: "Supply one valid source filename using ?file=" + TX.map((item) => item.filename).join(",") }, 400);
+      try {
+        await assertPrimaryHistoryVerified(env);
+        const db = getTursoClient(env);
+        const record = await db.execute({
+          sql: "SELECT r2_key,sha256 FROM source_files WHERE filename=?",
+          args: [source.filename]
+        });
+        if (!record.rows.length) return json({ ok: false, error: "No Turso source archive record exists for " + source.filename }, 404);
+        const item = record.rows[0];
+        const result = await reindexSourceToTurso(env, source, {
+          r2_key: String(item.r2_key),
+          sha256: String(item.sha256)
+        });
+        return json({ ok: true, storage: "turso-primary", ...result });
+      } catch (error) {
+        return json({ ok: false, storage: "turso-primary", error: error instanceof Error ? error.message : "Turso reindex failed" }, 502);
+      }
+    }
+
     if (url.pathname === "/api/admin/reindex" && request.method === "POST") {
       const token = request.headers.get("authorization");
       if (!env.API_TOKEN || token !== `Bearer ${env.API_TOKEN}`) return json({ error: "Unauthorized" }, 401);
@@ -545,6 +1248,10 @@ export default {
       console.log("Scheduled ingestion is paused; skipping D1 and Turso writes.");
       return;
     }
-    await ingest(env);
+    if (env.DATA_MODE === "turso-primary") {
+      await ingestToTurso(env);
+    } else {
+      await ingest(env);
+    }
   }
 };

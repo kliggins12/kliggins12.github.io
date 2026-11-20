@@ -4,6 +4,10 @@ on:
   # Scheduled runs are paused during the Cloudflare migration.
   workflow_dispatch:
 
+concurrency:
+  group: batchmate-site-data-refresh
+  cancel-in-progress: false
+
 permissions:
   contents: write
 
