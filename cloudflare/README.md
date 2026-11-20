@@ -65,6 +65,8 @@ The separate manually dispatched workflow **Turso Batchmate analysis artifact mi
 - `GET /api/primary/draws/summary` (all 17 Turso feeds)
 - `GET /api/primary/draws/latest` (latest draw per source)
 - `GET /api/primary/analysis` (latest verified Batchmate analysis snapshots)
+- `POST /api/primary/admin/ingest` (Bearer token required; refuses until full-history migration verification passes)
+- `POST /api/primary/admin/reindex?file=...` (Bearer token required; Turso-only reindex of one archived source)
 - `GET /api/primary/draws?game=...&session=...&limit=...` (all-game history with date/source cursor)
 - `GET /api/sources/:filename`
 - `GET /api/draws/latest`
@@ -81,7 +83,8 @@ The existing `/api/draws` route is the read-only migration source for the 17-fee
 - Schema initialization workflow: `.github/workflows/migrate-turso.yml`
 - Full-history migration workflow: `.github/workflows/turso-primary-full-history.yml`
 - Analysis artifact migration workflow: `.github/workflows/turso-analysis-artifacts.yml`
-- Production ingestion remains paused via `INGEST_PAUSED = "true"` and an empty Cron list.
+- Turso is configured as the future ingestion target via `DATA_MODE = "turso-primary"`; production ingestion remains paused via `INGEST_PAUSED = "true"` and an empty Cron list.
+- The new Turso-first collector is a code path only; it has not been run against live data.
 
 
 ## Website integration status
