@@ -69,6 +69,11 @@ footer{text-align:center}
 
 nav .nav-link{display:inline-block;border:1px solid var(--line);background:var(--panel);color:var(--muted);padding:9px 13px;border-radius:9px;font:inherit;text-decoration:none;text-align:center}
 
+.ticket{font-family:ui-monospace,SFMono-Regular,Consolas,monospace;font-weight:700;color:var(--gold)}
+.pick3-slot{min-height:48px}
+.pick3-slot strong{font-size:20px;color:var(--gold)}
+.storage-notice .notice-status{color:#ffd88d}
+@media(max-width:650px){table{min-width:520px}.grid{grid-template-columns:repeat(auto-fit,minmax(160px,1fr))}}
 </style>
 </head>
 <body>
@@ -80,12 +85,10 @@ nav .nav-link{display:inline-block;border:1px solid var(--line);background:var(-
 </header>
 <main>
 <section class="intro"><div><h1 id="pageTitle">Drawing Overview</h1><div class="muted">Follow past drawings, see how numbers changed, and review ideas for upcoming draws.</div></div></section>
-<aside class="notice storage-notice" role="note" aria-labelledby="storageNoticeTitle">
- <span class="notice-status">Important · planned storage change</span>
- <strong id="storageNoticeTitle">Read this before relying on local data.</strong>
- <p><strong>Local-first storage is planned but is not active in this release.</strong> NumberLab currently retrieves drawing history from its connected data service.</p>
- <p>When local-first storage is enabled, your working data will be kept in this browser profile on this device. It will not automatically sync to another computer, browser, or profile. Clearing website data, using private or incognito browsing, changing browsers or profiles, reinstalling the system, or losing the device can make local data unavailable.</p>
- <p>Browser persistent-storage permission can reduce automatic cleanup, but it cannot protect data from manual deletion, device failure, or loss. <strong>Do not treat the browser copy as your only backup.</strong> Export/restore tools and backup instructions must be available before local storage becomes the primary working copy. Keep exported backups somewhere separate from this device.</p>
+<aside class="notice storage-notice" role="note" aria-labelledby="storageNoticeTitle" aria-live="polite">
+ <span class="notice-status" id="storageNoticeStatus">Checking database status</span>
+ <strong id="storageNoticeTitle">Checking drawing history…</strong>
+ <p id="storageNoticeText">NumberLab will use the complete Turso history when all 17 source feeds are present and verified. Until then, it displays only the existing available history.</p>
 </aside>
 <div class="adslot" id="ad-top"><ins class="adsbygoogle"
      style="display:block"
@@ -118,21 +121,25 @@ nav .nav-link{display:inline-block;border:1px solid var(--line);background:var(-
      (adsbygoogle = window.adsbygoogle || []).push({});
 </script></div>
 <section id="walkthrough" class="panelview">
- <div class="tablewrap">
-  <div id="pick3BoardPreview" class="pick3-board" role="img" aria-label="Number display"></div>
+ <div class="card">
+  <h2>Recent Pick 3 drawings</h2>
+  <p class="muted">The most recent results are shown first, followed by earlier drawings. This is a chronological view, not a forecast or a playable board.</p>
+  <div class="tablewrap">
+   <div id="pick3BoardPreview" class="pick3-board" aria-label="Recent Pick 3 drawing sequence"></div>
+  </div>
  </div>
 </section>
 <section id="journal" class="panelview">
- <div class="card"><h2>Drawing Journal</h2><p class="muted">Browse drawings in date order by game and drawing time.</p><div class="notice">Drawing details will appear here when available.</div></div>
+ <div class="card"><h2>Drawing Journal</h2><p class="muted">Browse the loaded drawing history in date order for the selected game and drawing time.</p><div id="journalResults" class="tablewrap"><div class="notice">Load past drawings and choose a game to view its journal.</div></div></div>
 </section>
 <section id="shapes" class="panelview">
- <div class="card"><h2>Number Review</h2><p class="muted">Review the numbers from one drawing alongside the next drawing for the same game and time.</p><div class="notice">Number comparisons will appear here.</div></div>
+ <div class="card"><h2>Number Review</h2><p class="muted">Compare consecutive results. Digit games are compared by position; other games are compared by shared, added, and not-repeated values.</p><div id="shapeResults" class="tablewrap"><div class="notice">Load at least two drawings to compare results.</div></div></div>
 </section>
 <section id="transitions" class="panelview">
- <div class="card"><h2>Changes Over Time</h2><p class="muted">Review differences between past drawings in date order.</p><div class="notice">Past drawing comparisons will appear here.</div></div>
+ <div class="card"><h2>Changes Over Time</h2><p class="muted">Review how often each value appeared in the loaded history.</p><div id="transitionResults" class="tablewrap"><div class="notice">Load a drawing history to see number frequencies.</div></div></div>
 </section>
 <section id="assumptions" class="panelview">
- <div class="card"><h2>Ideas for the Next Drawing</h2><p class="muted">Review number combinations for upcoming drawings. These are ideas to consider, not predictions or a guarantee of results.</p><div class="notice">Number ideas will appear here when available.</div></div>
+ <div class="card"><h2>Number Ideas</h2><p class="muted">Review the most frequently observed values in the loaded history. These counts describe past results and are not predictions.</p><div id="assumptionResults"><div class="notice">Load a drawing history to display descriptive number counts.</div></div></div>
 </section>
 <section id="imports" class="panelview">
  <div class="card"><h2>Past Drawings</h2><p class="muted">Choose a game and drawing time to browse its past results.</p>
@@ -157,54 +164,6 @@ nav .nav-link{display:inline-block;border:1px solid var(--line);background:var(-
 </script></div>
 </main>
 <footer>Past drawing results are for reference only. Every drawing is random, and previous results do not change future odds.</footer>
-<script>
-const labels={overview:'Drawing Overview',walkthrough:'Chronological Walkthrough',journal:'Drawing Journal',shapes:'Number Review',transitions:'Changes Over Time',assumptions:'Number Ideas',imports:'Past Drawings'};
-function show(view){document.querySelectorAll('.panelview').forEach(x=>x.classList.toggle('active',x.id===view));document.querySelectorAll('nav button').forEach(x=>x.classList.toggle('active',x.dataset.view===view));document.getElementById('pageTitle').textContent=labels[view]||labels.overview;location.hash=view;}
-document.querySelectorAll('nav button').forEach(b=>b.addEventListener('click',()=>show(b.dataset.view)));
-document.querySelectorAll('[data-go]').forEach(b=>b.addEventListener('click',()=>show(b.dataset.go)));
-if(labels[location.hash.slice(1)])show(location.hash.slice(1));
- 
-const DATA_API='https://batchmate-data.kamika-us.workers.dev';
-let streamSummary=[];let historyCursor=null;let historyRows=[];
-function selectedStream(){const p=document.getElementById('streamSelect').value.split('|');return p.length===2?{game:p[0],session:p[1]}:null;}
-async function loadStreamPage(reset){
- const stream=selectedStream();if(!stream)return;const status=document.getElementById('csvStatus'),out=document.getElementById('historyResults');
- const params=new URLSearchParams({game:stream.game,session:stream.session,limit:'500'});if(!reset&&historyCursor)params.set('after',historyCursor);
- status.textContent='Loading drawings…';const response=await fetch(DATA_API+'/api/session-draws?'+params.toString(),{cache:'no-store'});const payload=await response.json();
- if(!response.ok||!payload.ok)throw new Error(payload.error||'History API request failed');if(reset)historyRows=[];historyRows=historyRows.concat(payload.draws||[]);historyCursor=payload.nextAfter||null;
- out.innerHTML='<table><thead><tr><th>Date</th><th>Drawn numbers</th></tr></thead><tbody>'+historyRows.map(d=>{let v=d.numbers;try{v=JSON.parse(d.numbers).join(', ')}catch(_){}return '<tr><td>'+d.draw_date+'</td><td style="font-family:monospace">'+v+'</td></tr>'}).join('')+'</tbody></table>';
- document.getElementById('loadMoreHistoryBtn').disabled=!historyCursor;status.textContent='Showing '+historyRows.length+' drawings'+(historyCursor?' · select “Show more drawings” to continue':' · all available drawings shown');
-}
-async function loadBatchmateCsvs(){
- const btn=document.getElementById('loadCsvBtn'),status=document.getElementById('csvStatus'),out=document.getElementById('csvResults');btn.disabled=true;status.textContent='Loading the list of available games…';
- try{const response=await fetch(DATA_API+'/api/session-draws/summary',{cache:'no-store'});const payload=await response.json();if(!response.ok||!payload.ok)throw new Error(payload.error||'Drawing history is temporarily unavailable');
-  streamSummary=payload.streams||[];status.textContent='Ready · '+Number(payload.drawCount).toLocaleString()+' past drawings';document.getElementById('recordCount').textContent=Number(payload.drawCount).toLocaleString();
-  document.getElementById('journalCount').textContent='0';document.getElementById('transitionCount').textContent='0';document.getElementById('assumptionCount').textContent='0';
-  const select=document.getElementById('streamSelect');select.innerHTML=streamSummary.map(s=>'<option value="'+s.game+'|'+s.session+'">'+s.game+' · '+s.session+' ('+Number(s.draw_count).toLocaleString()+')</option>').join('');
-  document.getElementById('loadHistoryBtn').disabled=streamSummary.length===0;
-  out.innerHTML='<table><thead><tr><th>Game</th><th>Session</th><th>Drawings</th><th>First date</th><th>Latest date</th></tr></thead><tbody>'+streamSummary.map(s=>'<tr><td>'+s.game+'</td><td>'+s.session+'</td><td>'+Number(s.draw_count).toLocaleString()+'</td><td>'+s.first_draw_date+'</td><td>'+s.last_draw_date+'</td></tr>').join('')+'</tbody></table>';if(streamSummary.length)await loadStreamPage(true);
- }catch(e){status.textContent='History unavailable';out.textContent=e.message;console.error('Drawing history connection failed:',e)}finally{btn.disabled=false}
-}
-document.getElementById('loadCsvBtn').addEventListener('click',loadBatchmateCsvs);
-document.getElementById('loadHistoryBtn').addEventListener('click',()=>loadStreamPage(true).catch(e=>document.getElementById('csvStatus').textContent=e.message));
-document.getElementById('loadMoreHistoryBtn').addEventListener('click',()=>loadStreamPage(false).catch(e=>document.getElementById('csvStatus').textContent=e.message));
-document.getElementById('streamSelect').addEventListener('change',()=>{historyCursor=null;historyRows=[];document.getElementById('loadMoreHistoryBtn').disabled=true;loadStreamPage(true).catch(e=>document.getElementById('csvStatus').textContent=e.message)});
-// Render the confirmed Pick 3 baseline board. This view is intentionally
-// data-honest: only the three agreed starting anchors are marked at this stage.
-(function renderPick3InitialBoard(){
- const host=document.getElementById('pick3BoardPreview');
- if(!host)return;
- const cells=[];
- for(let row=0;row<10;row++){
-  for(let column=0;column<3;column++){
-   const anchor=row===0;
-   cells.push('<div class="pick3-slot'+(anchor?' anchor':'')+'">'+(anchor?'<strong>0</strong>':'')+'</div>');
-  }
- }
- host.innerHTML=cells.join('');
-})();
-
-
-</script>
+<script type="module" src="numberlab-app.mjs"></script>
 </body>
 </html>
