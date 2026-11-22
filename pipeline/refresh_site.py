@@ -29,6 +29,11 @@ COMBINE = [
     ["python3", "combine_daily4.py"],
     ["python3", "combine_allornothing.py"],
 ]
+SPACE = [
+    ["python3", "build_pick3_space.py"],
+    ["python3", "build_daily4_space.py"],
+    ["python3", "build_draw_sequence.py"],
+]
 MINERS = [
     ["python3", "mine_pick3_booleans_universal.py"],
     ["python3", "mine_daily4_booleans_universal.py"],
@@ -76,7 +81,7 @@ def refresh_data():
 
 def build_answers():
     COND.mkdir(parents=True, exist_ok=True)
-    for cmd in MINERS + BUILD:
+    for cmd in SPACE + MINERS + BUILD:
         run(cmd)
 
 
