@@ -1,0 +1,25 @@
+{
+ "latest_dates": {
+  "pick3_morning": "2026-11-21",
+  "pick3_day": "2026-11-21",
+  "pick3_evening": "2026-11-21",
+  "pick3_night": "2026-11-21",
+  "pick3_all_synced": "2026-11-21",
+  "daily4_morning": "2026-11-21",
+  "daily4_day": "2026-11-21",
+  "daily4_evening": "2026-11-21",
+  "daily4_night": "2026-11-21",
+  "daily4_all_synced": "2026-11-21",
+  "allornothing_morning": "2026-11-21",
+  "allornothing_day": "2026-11-21",
+  "allornothing_evening": "2026-11-21",
+  "allornothing_night": "2026-11-21",
+  "allornothing_all_synced": "2026-11-21",
+  "cashfive": "2026-11-21",
+  "lottotexas": "2026-11-21",
+  "texastwostep": "2026-11-19",
+  "powerball": "2026-11-21",
+  "megamillions": "2026-11-20"
+ },
+ "asset_sha256": "564935cd4fff964d3a7d18e7afb1c997b4f72f04138f465efea77cadc08fd7ee"
+}
