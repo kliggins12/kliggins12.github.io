@@ -4,9 +4,12 @@ import argparse
 import hashlib
 import html
 import json
+import os
 import re
 import subprocess
+from datetime import datetime
 from pathlib import Path
+from zoneinfo import ZoneInfo
 
 PIPE = Path(__file__).resolve().parent
 SITE = PIPE.parent
@@ -41,6 +44,9 @@ MINERS = [
     ["python3", "mine_big_games_universal.py"],
 ]
 BUILD = [["python3", "build_upcoming_answers.py"]]
+
+TARGET_HOURS_CT = {11, 13, 19, 23}
+CT = ZoneInfo("America/Chicago")
 
 
 def run(cmd):
@@ -107,6 +113,12 @@ def main():
         changed = {k: (state.get("latest_dates", {}).get(k), v) for k, v in latest.items() if state.get("latest_dates", {}).get(k) != v}
         print(json.dumps({"changed_targets": changed, "state_latest": state.get("latest_dates", {})}, indent=1))
         return
+
+    if os.environ.get("GITHUB_EVENT_NAME") == "schedule" and not args.force:
+        now_ct = datetime.now(CT)
+        if now_ct.hour not in TARGET_HOURS_CT:
+            print(f"scheduled run outside target hours (CT {now_ct:%H:%M}); skipping")
+            return
 
     refresh_data()
     latest = latest_dates()

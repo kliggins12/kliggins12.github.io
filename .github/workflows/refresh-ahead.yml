@@ -2,11 +2,8 @@ name: Refresh Ahead candidates
 
 on:
   schedule:
-    # 11 AM / 1 PM / 7 PM / 11 PM Central (CST = UTC-6)
-    - cron: '0 17 * * *'
-    - cron: '0 19 * * *'
-    - cron: '0 1 * * *'
-    - cron: '0 5 * * *'
+    # Hourly; refresh_site.py only does the work at 11/1/7/11 CT (DST-aware).
+    - cron: '0 * * * *'
   workflow_dispatch:
 
 permissions:
