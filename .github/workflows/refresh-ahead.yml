@@ -1,0 +1,35 @@
+name: Refresh Ahead candidates
+
+on:
+  schedule:
+    # 11 AM / 1 PM / 7 PM / 11 PM Central (CST = UTC-6)
+    - cron: '0 17 * * *'
+    - cron: '0 19 * * *'
+    - cron: '0 1 * * *'
+    - cron: '0 5 * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  refresh:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.x'
+      - name: Refresh candidates and index.html
+        run: python3 pipeline/refresh_site.py
+      - name: Commit and push if changed
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add index.html ahead_publish_state.json
+          if git diff --cached --quiet; then
+            echo "no changes to commit"
+          else
+            git commit -m "Refresh Ahead candidate outcomes"
+            git push
+          fi
